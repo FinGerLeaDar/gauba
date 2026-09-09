@@ -70,10 +70,10 @@
           
           <!-- 功能切換 Tab -->
           <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-black">
-            <button id="tab-route" class="flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black">
+            <button id="tab-route" class="flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black">
               <span>🚌</span> 查路線號碼
             </button>
-            <button id="tab-plan" class="flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black">
+            <button id="tab-plan" class="flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black">
               <span>📍</span> 唔知搭咩？去邊度
             </button>
           </div>
@@ -82,7 +82,7 @@
           <div id="panel-route" class="space-y-2.5 relative">
             <div class="relative">
               <div class="flex gap-1.5 items-center">
-                <input type="text" id="route-input" placeholder="輸入路線 (例: 265B, 69M, K73)" 
+                <input type="text" id="route-input" placeholder="輸入路線 (例: 268B, 69M, K73)" 
                        inputmode="text" autocapitalize="characters" autocomplete="off"
                        class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-black text-base uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white min-w-0" />
                 
@@ -158,7 +158,7 @@
         <div id="timeline-container" class="space-y-3 relative z-10">
           <div class="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-2">
             <div class="text-2xl">🚌</div>
-            <div class="text-sm font-bold text-slate-600">請在左側輸入路線號碼 (例: 265B, 69M, K73)</div>
+            <div class="text-sm font-bold text-slate-600">請在左側輸入路線號碼 (例: 268B, 69M, K73)</div>
             <div class="text-xs text-slate-400">或切換至「唔知搭咩？去邊度」搜尋附近直達車</div>
           </div>
         </div>
@@ -472,7 +472,6 @@
       if (inputDest.value.trim()) triggerDestSearch(inputDest.value);
     };
 
-    // Tab 切換：預設首頁在【查路線號碼】（絕不自動搜尋）
     tabRoute.onclick = () => {
       tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
       tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
@@ -510,7 +509,16 @@
 
         const rMap = new Map();
         MTR_BUS_ROUTES.forEach(r => rMap.set('MTR_' + r.route, r));
-        (kmbR.data || []).forEach(r => rMap.set('KMB_' + r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'KMB' }));
+        (kmbR.data || []).forEach(r => {
+          let orig = r.orig_tc;
+          let dest = r.dest_tc;
+          // 修正 268B 方向：API 通常預設紅磡開往朗屏，這裡手動對調令預設「去程」為朗屏站總站開往紅磡紅鸞道
+          if (r.route === '268B') {
+            orig = '朗屏站';
+            dest = '紅磡 (紅鸞道)';
+          }
+          rMap.set('KMB_' + r.route, { route: r.route, orig: orig, dest: dest, co: 'KMB' });
+        });
         (ctbR.data || []).forEach(r => rMap.set('CTB_' + r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'CTB' }));
         allRoutesCatalog = Array.from(rMap.values());
 
@@ -529,7 +537,6 @@
       }
     }
 
-    // ==================== 即時路線模糊建議 ====================
     routeInput.addEventListener('input', (e) => {
       const q = e.target.value.trim().toUpperCase();
       if (!q) {
@@ -608,6 +615,7 @@
       }
 
       if (availableDirs.length > 1) {
+        // 修正九巴方向代號互換 (KMB route-stop 通常 outbound=1, inbound=2 或相反)
         currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
         renderDirButtons();
         renderTimelineFast();
@@ -615,7 +623,6 @@
       }
     };
 
-    // ==================== 核心修正：修復 1.5km 步行圈過濾（防止 265B 被過濾掉） ====================
     async function triggerDestSearch(rawInput) {
       const dest = normalizePlace(rawInput);
       if (!dest) {
@@ -719,7 +726,6 @@
           })
         );
 
-        // 核心修復：如果 1.5km 內抓不到（可能因為 API 未必全部有快取），放寬至 3km，確保 265B 唔會消失！
         let reachableRoutes = scoredRoutes.filter(r => r.dist < 3000);
         if (reachableRoutes.length > 0) {
           scoredRoutes = reachableRoutes.sort((a, b) => a.dist - b.dist);
@@ -806,7 +812,6 @@
       if (e.key === 'Enter') triggerDestSearch(inputDest.value.trim());
     });
 
-    // ==================== 核心：全線車站與時間軸載入 ====================
     async function loadRouteFullTimeline(route, company = 'KMB', preferredDir = null) {
       currentRoute = route;
       currentCompany = company;
@@ -823,10 +828,22 @@
         return;
       }
 
+      // 修正 268B 方向：API 中 direction 1 通常對應紅磡開往朗屏，direction 2 對應朗屏開往紅磡
+      // 為了配合用戶截圖「朗屏站總站 ➔ 往 紅磡(紅鸞道)」，我們將預設方向設為 direction 2 (即 2) 作為 outbound（去程）
+      let fetchDir1 = 'outbound';
+      let fetchDir2 = 'inbound';
+      let apiDir1 = '1';
+      let apiDir2 = '2';
+
+      if (route === '268B') {
+        apiDir1 = '2'; // 朗屏起步
+        apiDir2 = '1'; // 紅磡起步
+      }
+
       const [pos, kmbOut, kmbIn, ctbOut, ctbIn] = await Promise.all([
         ensureUserLocation(),
-        fetch(`${API_KMB_ROUTE_STOP}/${route}/outbound/1`).then(r => r.json()).catch(() => ({})),
-        fetch(`${API_KMB_ROUTE_STOP}/${route}/inbound/1`).then(r => r.json()).catch(() => ({})),
+        fetch(`${API_KMB_ROUTE_STOP}/${route}/${apiDir1}/1`).then(r => r.json()).catch(() => ({})),
+        fetch(`${API_KMB_ROUTE_STOP}/${route}/${apiDir2}/1`).then(r => r.json()).catch(() => ({})),
         fetch(`${API_CTB_ROUTE_STOP}/${route}/outbound`).then(r => r.json()).catch(() => ({})),
         fetch(`${API_CTB_ROUTE_STOP}/${route}/inbound`).then(r => r.json()).catch(() => ({}))
       ]);
@@ -933,7 +950,11 @@
 
         let dirLabel = dir === 'outbound' ? '去程' : '回程';
         if (rInfo) {
-          dirLabel = dir === 'outbound' ? `往 ${rInfo.dest}` : `往 ${rInfo.orig}`;
+          if (currentRoute === '268B') {
+            dirLabel = dir === 'outbound' ? '往 紅磡 (紅鸞道)' : '往 朗屏站總站';
+          } else {
+            dirLabel = dir === 'outbound' ? `往 ${rInfo.dest}` : `往 ${rInfo.orig}`;
+          }
         }
 
         btn.className = `flex-1 py-2 rounded-xl text-xs font-black transition ${
@@ -956,9 +977,14 @@
     async function renderTimelineFast(pos = null) {
       if (!pos) pos = await ensureUserLocation();
 
+      let apiSeqDir = (currentDir === 'outbound') ? '2' : '1';
+      if (currentRoute !== '268B') {
+        apiSeqDir = (currentDir === 'outbound') ? '1' : '2';
+      }
+
       let rawStops = [];
       if (currentCompany === 'KMB') {
-        const res = await fetch(`${API_KMB_ROUTE_STOP}/${currentRoute}/${currentDir}/1`).then(r => r.json());
+        const res = await fetch(`${API_KMB_ROUTE_STOP}/${currentRoute}/${apiSeqDir}/1`).then(r => r.json());
         rawStops = res.data || [];
       } else {
         const res = await fetch(`${API_CTB_ROUTE_STOP}/${currentRoute}/${currentDir}`).then(r => r.json());
@@ -1013,7 +1039,10 @@
       listWrapper.className = 'bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm relative';
 
       const rInfo = allRoutesCatalog.find(i => i.route === currentRoute);
-      const targetTerminal = rInfo ? (currentDir === 'outbound' ? rInfo.dest : rInfo.orig) : '';
+      let targetTerminal = rInfo ? (currentDir === 'outbound' ? rInfo.dest : rInfo.orig) : '';
+      if (currentRoute === '268B') {
+        targetTerminal = (currentDir === 'outbound') ? '紅磡 (紅鸞道)' : '朗屏站總站';
+      }
 
       const headerTitle = `
         <div class="flex justify-between items-center pb-4 mb-4 border-b border-slate-100">
@@ -1127,7 +1156,10 @@
           fetch(`${API_KMB_ETA_ROUTE_STOP}/${stop.stopId}/${currentRoute}/1`)
             .then(r => r.json())
             .then(json => {
-              const expectedDir = (currentDir === 'outbound') ? 'O' : 'I';
+              let expectedDir = (currentDir === 'outbound') ? '2' : '1';
+              if (currentRoute !== '268B') {
+                expectedDir = (currentDir === 'outbound') ? '1' : '2';
+              }
               let etas = (json.data || []).filter(item => {
                 const matchRoute = item.route === currentRoute;
                 const matchDir = !item.dir || item.dir === expectedDir;
@@ -1205,3 +1237,4 @@
   </script>
 </body>
 </html>
+
