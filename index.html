@@ -14,12 +14,12 @@
 <body class="bg-slate-100 text-slate-800 min-h-screen pb-16 select-none font-sans">
 
   <!-- Header -->
-  <header class="bg-slate-900 text-white px-4 py-3 shadow sticky top-0 z-40 flex justify-between items-center">
+  <header class="bg-slate-900 text-white px-4 py-3 shadow sticky top-0 z-50 flex justify-between items-center">
     <div class="flex items-center gap-2">
       <span class="text-xl">🚌</span>
       <div>
         <h1 class="text-base font-black tracking-wide leading-none">全港巴士實時雷達</h1>
-        <span class="text-[10px] text-slate-400">KMB · Citybus · MTR Bus (K車)</span>
+        <span class="text-[10px] text-slate-400">九巴 · 城巴 · 港鐵巴士 (K車)</span>
       </div>
     </div>
     <div id="refresh-badge" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-slate-300 hidden">
@@ -29,15 +29,21 @@
 
   <main class="max-w-md mx-auto p-3 space-y-3">
     
-    <!-- 搜尋卡片 -->
-    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 relative z-30">
-      <div class="flex gap-2">
-        <input type="text" id="route-input" placeholder="路線 (例: 98D, K73, E22, 102)" 
-               inputmode="text" autocapitalize="characters" autocomplete="off"
-               class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-lg uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-        <button id="btn-search-route" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl active:scale-95 transition text-base">
-          搵車
-        </button>
+    <!-- 搜尋與模糊建議容器 -->
+    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 relative z-40">
+      <div class="relative">
+        <div class="flex gap-2">
+          <input type="text" id="route-input" placeholder="路線 (例: K73, 98D, E22, 1A)" 
+                 inputmode="text" autocapitalize="characters" autocomplete="off"
+                 class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-lg uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          <button id="btn-search-route" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl active:scale-95 transition text-base">
+            搵車
+          </button>
+        </div>
+
+        <!-- 模糊搜尋下拉建議選單 (Autocomplete Dropdown) -->
+        <div id="suggestions-box" class="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-64 overflow-y-auto hidden z-50 divide-y divide-slate-100">
+        </div>
       </div>
 
       <!-- 常用歷史 Chips -->
@@ -46,17 +52,17 @@
         <div id="history-chips" class="flex gap-1.5"></div>
       </div>
 
-      <!-- 方向列 + 對調掣 -->
+      <!-- 方向列 + 對調掣 (KMB/CTB 專用) -->
       <div id="dir-panel" class="hidden flex items-center gap-2 pt-1 border-t border-slate-100">
         <div id="dir-buttons" class="flex flex-1 gap-1.5"></div>
-        <button id="btn-reverse" title="對調方向" class="bg-slate-100 active:bg-slate-300 text-slate-700 font-bold px-3.5 py-2 rounded-xl text-base border border-slate-300 active:rotate-180 transition-transform flex items-center justify-center">
+        <button id="btn-reverse" title="對調去程/回程" class="bg-slate-100 active:bg-slate-300 text-slate-700 font-bold px-3.5 py-2 rounded-xl text-base border border-slate-300 active:rotate-180 transition-transform flex items-center justify-center">
           ⇆
         </button>
       </div>
     </div>
 
     <!-- Status Bar -->
-    <div id="status-bar" class="text-xs text-slate-400 text-center font-medium">輸入任何九巴、城巴或港鐵 K 車路線</div>
+    <div id="status-bar" class="text-xs text-slate-400 text-center font-medium">載入全港路線庫中...</div>
 
     <!-- 列表展示區 -->
     <div id="results" class="space-y-3 relative z-10"></div>
@@ -64,24 +70,51 @@
   </main>
 
   <script>
-    // API 端點
-    const API_KMB = {
-      routeStop: 'https://data.etabus.gov.hk/v1/transport/kmb/route-stop',
-      stop: 'https://data.etabus.gov.hk/v1/transport/kmb/stop/',
-      eta: 'https://data.etabus.gov.hk/v1/transport/kmb/eta'
-    };
-    const API_CTB = {
-      routeStop: 'https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB',
-      stop: 'https://rt.data.gov.hk/v2/transport/citybus/stop/',
-      eta: 'https://rt.data.gov.hk/v2/transport/citybus/eta/CTB'
-    };
-    const API_MTR = {
-      route: 'https://rt.data.gov.hk/v1/transport/mtr/bus/getRoute.php',
-      eta: 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule.php'
-    };
+    // 港鐵巴士全線硬編碼庫
+    const MTR_BUS_ROUTES = [
+      { route: "K73", orig: "天恒", dest: "元朗(西)", co: "MTR" },
+      { route: "K74", orig: "天水圍市中心", dest: "凹頭 (循環線)", co: "MTR" },
+      { route: "K75A", orig: "天水圍站", dest: "洪水橋 (循環線)", co: "MTR" },
+      { route: "K75P", orig: "天瑞", dest: "洪水橋 (循環線)", co: "MTR" },
+      { route: "K75S", orig: "天水圍站", dest: "洪福邨", co: "MTR" },
+      { route: "K76", orig: "天恒", dest: "天水圍站", co: "MTR" },
+      { route: "K76S", orig: "濕地公園路", dest: "天水圍站", co: "MTR" },
+      { route: "K65", orig: "元朗站", dest: "流浮山", co: "MTR" },
+      { route: "K65A", orig: "天恩", dest: "流浮山", co: "MTR" },
+      { route: "K66", orig: "朗屏", dest: "大棠黃泥墩村", co: "MTR" },
+      { route: "K66A", orig: "朗屏", dest: "大棠山道", co: "MTR" },
+      { route: "K68", orig: "元朗工業邨", dest: "元朗公園 (循環線)", co: "MTR" },
+      { route: "K51", orig: "富泰", dest: "大欖", co: "MTR" },
+      { route: "K51A", orig: "富泰", dest: "掃管笏", co: "MTR" },
+      { route: "K52", orig: "屯門站", dest: "龍鼓灘", co: "MTR" },
+      { route: "K52A", orig: "屯門站", dest: "曾咀", co: "MTR" },
+      { route: "K52S", orig: "屯門站", dest: "龍鼓灘", co: "MTR" },
+      { route: "K53", orig: "屯門站", dest: "掃管笏 (循環線)", co: "MTR" },
+      { route: "K54", orig: "和田邨", dest: "屯門市中心 (循環線)", co: "MTR" },
+      { route: "K58", orig: "富泰", dest: "青山灣", co: "MTR" },
+      { route: "506", orig: "屯門碼頭", dest: "兆麟", co: "MTR" },
+      { route: "K12", orig: "大埔墟站", dest: "八號花園", co: "MTR" },
+      { route: "K14", orig: "大埔超級城", dest: "大埔墟站", co: "MTR" },
+      { route: "K17", orig: "大埔墟站", dest: "富善", co: "MTR" },
+      { route: "K18", orig: "大埔墟站", dest: "廣福", co: "MTR" }
+    ];
 
-    const HISTORY_KEY = 'hk_recent_routes_v2';
+    const API_KMB_ROUTES = 'https://data.etabus.gov.hk/v1/transport/kmb/route/';
+    const API_KMB_ROUTE_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/route-stop';
+    const API_KMB_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/stop/';
+    const API_KMB_ETA = 'https://data.etabus.gov.hk/v1/transport/kmb/eta';
+
+    const API_CTB_ROUTE_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB';
+    const API_CTB_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/stop/';
+    const API_CTB_ETA = 'https://rt.data.gov.hk/v2/transport/citybus/eta/CTB';
+
+    const API_MTR_BUS_ETA = 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule';
+
+    const ROUTES_CACHE_KEY = 'hk_all_routes_v3';
+    const HISTORY_KEY = 'hk_recent_routes_v3';
+
     const routeInput = document.getElementById('route-input');
+    const suggestionsBox = document.getElementById('suggestions-box');
     const btnSearch = document.getElementById('btn-search-route');
     const btnReverse = document.getElementById('btn-reverse');
     const dirPanel = document.getElementById('dir-panel');
@@ -93,6 +126,7 @@
     const refreshBadge = document.getElementById('refresh-badge');
     const timerSec = document.getElementById('timer-sec');
 
+    let allRoutesCatalog = [];
     let currentCompany = ''; // 'KMB', 'CTB', 'MTR'
     let currentRoute = '';
     let currentDir = 'outbound';
@@ -102,7 +136,6 @@
     let refreshInterval = null;
     let countdownSec = 30;
 
-    // Haversine Distance (米)
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
@@ -122,7 +155,100 @@
       });
     }
 
-    // 常用紀錄
+    // 1. 初始化路線表 (合體 KMB + MTR Bus)
+    async function initCatalog() {
+      const cached = localStorage.getItem(ROUTES_CACHE_KEY);
+      if (cached) {
+        allRoutesCatalog = JSON.parse(cached);
+        statusBar.textContent = `✅ 路線庫已就緒 (${allRoutesCatalog.length} 條路線)`;
+        return;
+      }
+
+      try {
+        statusBar.textContent = '🔄 預載全港路線數據中...';
+        const res = await fetch(API_KMB_ROUTES);
+        const json = await res.json();
+        
+        const map = new Map();
+        // 加入 MTR Bus
+        MTR_BUS_ROUTES.forEach(r => map.set(r.route, r));
+
+        // 加入九巴
+        (json.data || []).forEach(r => {
+          if (!map.has(r.route)) {
+            map.set(r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'KMB' });
+          }
+        });
+
+        allRoutesCatalog = Array.from(map.values());
+        localStorage.setItem(ROUTES_CACHE_KEY, JSON.stringify(allRoutesCatalog));
+        statusBar.textContent = `✅ 路線庫已就緒 (${allRoutesCatalog.length} 條路線)`;
+      } catch (e) {
+        // Fallback: 至少有 MTR Bus
+        allRoutesCatalog = MTR_BUS_ROUTES;
+        statusBar.textContent = '⚠️ 預載部分路線庫，支援手動輸入';
+      }
+    }
+
+    // 2. 模糊搜尋輸入監聽 (打 K / 98 彈出建議)
+    routeInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim().toUpperCase();
+      if (!query) {
+        suggestionsBox.classList.add('hidden');
+        suggestionsBox.innerHTML = '';
+        return;
+      }
+
+      const matches = allRoutesCatalog.filter(r => r.route.includes(query))
+        .sort((a, b) => {
+          const aStarts = a.route.startsWith(query);
+          const bStarts = b.route.startsWith(query);
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          return a.route.localeCompare(b.route, undefined, { numeric: true });
+        })
+        .slice(0, 10);
+
+      renderSuggestions(matches);
+    });
+
+    function renderSuggestions(list) {
+      if (!list.length) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      suggestionsBox.innerHTML = '';
+      list.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'px-4 py-2.5 hover:bg-slate-50 active:bg-slate-100 cursor-pointer flex justify-between items-center transition';
+        const tagBg = item.co === 'MTR' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600';
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="font-black text-base ${item.co === 'MTR' ? 'text-emerald-600' : 'text-red-600'}">${item.route}</span>
+            <span class="text-xs ${tagBg} px-1.5 py-0.5 rounded font-bold">${item.co}</span>
+            <span class="text-xs text-slate-500 font-medium truncate max-w-[170px]">${item.orig} ➔ ${item.dest}</span>
+          </div>
+          <span class="text-xs text-slate-400">選擇</span>
+        `;
+        row.onclick = () => {
+          routeInput.value = item.route;
+          suggestionsBox.classList.add('hidden');
+          searchRoute();
+        };
+        suggestionsBox.appendChild(row);
+      });
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    // 點擊空白處收起下拉
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#route-input') && !e.target.closest('#suggestions-box')) {
+        suggestionsBox.classList.add('hidden');
+      }
+    });
+
+    // 3. 常用紀錄
     function loadHistory() {
       const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
       if (!list.length) { historyBox.classList.add('hidden'); return; }
@@ -134,6 +260,7 @@
         chip.textContent = rt;
         chip.onclick = () => {
           routeInput.value = rt;
+          suggestionsBox.classList.add('hidden');
           searchRoute();
         };
         historyChips.appendChild(chip);
@@ -147,15 +274,16 @@
       loadHistory();
     }
 
-    // 主搜尋邏輯
+    // 4. 核心搜尋：分流 KMB / CTB / MTR Bus
     async function searchRoute() {
       const route = routeInput.value.trim().toUpperCase();
       if (!route) return;
       routeInput.blur();
+      suggestionsBox.classList.add('hidden');
 
       currentRoute = route;
       saveHistory(route);
-      statusBar.textContent = `🔍 搜尋 ${route} 中...`;
+      statusBar.textContent = `🔍 搜尋路線 ${route} 中...`;
       results.innerHTML = '';
       dirPanel.classList.add('hidden');
       dirButtons.innerHTML = '';
@@ -163,28 +291,21 @@
       clearInterval(refreshInterval);
       refreshBadge.classList.add('hidden');
 
-      // 1. 如果係 K 字頭路線 -> 優先走港鐵巴士 API
-      if (route.startsWith('K') || route === '506') {
-        try {
-          const res = await fetch(`${API_MTR.route}?route=${route}`);
-          const data = await res.json();
-          if (data && data.routes && data.routes.length > 0) {
-            currentCompany = 'MTR';
-            setupMTRRoute(data.routes);
-            return;
-          }
-        } catch (e) {
-          console.warn('MTR search failed, fallback to KMB/CTB');
-        }
+      // 檢查係咪 MTR Bus
+      const isMtrBus = MTR_BUS_ROUTES.some(r => r.route === route);
+      if (isMtrBus) {
+        currentCompany = 'MTR';
+        loadMTRBusStops(route);
+        return;
       }
 
-      // 2. 搜尋九巴與城巴 (支援平行查詢)
+      // 否則為 KMB 或 CTB
       try {
         const [kmbOut, kmbIn, ctbOut, ctbIn] = await Promise.all([
-          fetch(`${API_KMB.routeStop}/${route}/outbound/1`).then(r => r.json()).catch(() => ({})),
-          fetch(`${API_KMB.routeStop}/${route}/inbound/1`).then(r => r.json()).catch(() => ({})),
-          fetch(`${API_CTB.routeStop}/${route}/outbound`).then(r => r.json()).catch(() => ({})),
-          fetch(`${API_CTB.routeStop}/${route}/inbound`).then(r => r.json()).catch(() => ({}))
+          fetch(`${API_KMB_ROUTE_STOP}/${route}/outbound/1`).then(r => r.json()).catch(() => ({})),
+          fetch(`${API_KMB_ROUTE_STOP}/${route}/inbound/1`).then(r => r.json()).catch(() => ({})),
+          fetch(`${API_CTB_ROUTE_STOP}/${route}/outbound`).then(r => r.json()).catch(() => ({})),
+          fetch(`${API_CTB_ROUTE_STOP}/${route}/inbound`).then(r => r.json()).catch(() => ({}))
         ]);
 
         const kmbValid = (kmbOut.data && kmbOut.data.length) || (kmbIn.data && kmbIn.data.length);
@@ -206,48 +327,85 @@
         currentDir = availableDirs[0];
         dirPanel.classList.remove('hidden');
         renderDirButtons();
-        loadRouteStops();
+        loadFranchisedBusStops();
         startAutoRefresh();
 
       } catch (e) {
-        statusBar.textContent = '❌ 網絡錯誤，請稍後再試';
+        statusBar.textContent = '❌ 網絡繁忙，請稍後重試';
       }
     }
 
-    // 處理港鐵巴士 (MTR Bus)
-    let mtrBusData = [];
-    function setupMTRRoute(routes) {
-      mtrBusData = routes;
-      availableDirs = routes.map((r, i) => `dir_${i}`);
-      currentDir = availableDirs[0];
-      dirPanel.classList.remove('hidden');
+    // 處理港鐵巴士 (MTR Bus POST API)
+    async function loadMTRBusStops(route) {
+      statusBar.textContent = `📍 正在獲取港鐵巴士 ${route} 站點及班次...`;
+      results.innerHTML = '<div class="text-center text-slate-400 py-10"><div class="inline-block animate-spin mr-1">⏳</div> 載入中...</div>';
 
-      dirButtons.innerHTML = '';
-      routes.forEach((r, idx) => {
-        const btn = document.createElement('button');
-        const dirKey = `dir_${idx}`;
-        const isActive = dirKey === currentDir;
-        btn.className = `flex-1 py-2 rounded-xl text-xs font-bold transition ${
-          isActive ? 'bg-slate-800 text-white shadow-sm' : 'bg-slate-100 text-slate-600 active:bg-slate-200'
-        }`;
-        btn.textContent = `往 ${r.routeNameZh || r.endStationZh || '未知'}`;
-        btn.onclick = () => {
-          if (currentDir === dirKey) return;
-          currentDir = dirKey;
-          setupMTRRoute(mtrBusData);
-          loadRouteStops();
-        };
-        dirButtons.appendChild(btn);
-      });
+      try {
+        const res = await fetch(API_MTR_BUS_ETA, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: "zh", routeName: route })
+        });
+        const data = await res.json();
+        const busStops = data.busStop || [];
 
-      btnReverse.disabled = routes.length <= 1;
-      btnReverse.classList.toggle('opacity-30', routes.length <= 1);
-      loadRouteStops();
-      startAutoRefresh();
+        if (!busStops.length) {
+          statusBar.textContent = `❌ 港鐵巴士 ${route} 暫無服務或已過尾班車`;
+          results.innerHTML = '';
+          return;
+        }
+
+        statusBar.textContent = `🎯 港鐵巴士 ${route} (共 ${busStops.length} 個站點)`;
+        results.innerHTML = '';
+
+        busStops.forEach((stop, idx) => {
+          const card = document.createElement('div');
+          card.className = 'bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2';
+          
+          let etasHtml = '';
+          const buses = stop.bus || [];
+          if (!buses.length) {
+            etasHtml = '<span class="text-xs text-slate-400">暫無下班車資訊</span>';
+          } else {
+            etasHtml = buses.slice(0, 3).map(b => {
+              const sec = parseInt(b.departureTimeInSecond);
+              const min = Math.round(sec / 60);
+              const label = min <= 1 ? '即將開出/抵達' : `${min} 分鐘`;
+              const isUrgent = min <= 3;
+              return `
+                <div class="flex justify-between items-center text-xs py-0.5">
+                  <span class="text-slate-600 font-medium">${b.departureTimeText || '班次'}</span>
+                  <span class="px-2 py-0.5 rounded font-black shrink-0 ${isUrgent ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-800'}">${label}</span>
+                </div>
+              `;
+            }).join('');
+          }
+
+          card.innerHTML = `
+            <div class="flex justify-between items-center">
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-bold">第 ${idx + 1} 站</span>
+                <h3 class="text-base font-black text-slate-800 tracking-tight">${stop.busStopId}</h3>
+              </div>
+              <span class="text-xs text-slate-400">港鐵巴士</span>
+            </div>
+            <div class="text-sm space-y-1 pt-1.5 border-t border-slate-100">
+              ${etasHtml}
+            </div>
+          `;
+          results.appendChild(card);
+        });
+
+        startAutoRefresh();
+
+      } catch (e) {
+        statusBar.textContent = '❌ 港鐵巴士伺服器無回應';
+        results.innerHTML = '';
+      }
     }
 
+    // 處理九巴 / 城巴站點與定位排序
     function renderDirButtons() {
-      if (currentCompany === 'MTR') return;
       dirButtons.innerHTML = '';
       availableDirs.forEach(dir => {
         const btn = document.createElement('button');
@@ -261,7 +419,7 @@
           if (currentDir === dir) return;
           currentDir = dir;
           renderDirButtons();
-          loadRouteStops();
+          loadFranchisedBusStops();
         };
         dirButtons.appendChild(btn);
       });
@@ -272,15 +430,12 @@
 
     btnReverse.onclick = () => {
       if (availableDirs.length <= 1) return;
-      const nextIdx = (availableDirs.indexOf(currentDir) + 1) % availableDirs.length;
-      currentDir = availableDirs[nextIdx];
-      if (currentCompany === 'MTR') setupMTRRoute(mtrBusData);
-      else renderDirButtons();
-      loadRouteStops();
+      currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
+      renderDirButtons();
+      loadFranchisedBusStops();
     };
 
-    // 載入指定公司車站與距離排序
-    async function loadRouteStops() {
+    async function loadFranchisedBusStops() {
       statusBar.textContent = '📍 搜尋身邊最近車站...';
       results.innerHTML = '<div class="text-center text-slate-400 py-10"><div class="inline-block animate-spin mr-1">⏳</div> 尋找最近車站中...</div>';
 
@@ -288,31 +443,22 @@
       let stopList = [];
 
       try {
-        if (currentCompany === 'MTR') {
-          const activeRoute = mtrBusData[availableDirs.indexOf(currentDir)];
-          stopList = (activeRoute.stops || []).map((s, idx) => ({
-            seq: idx + 1,
-            stopId: s.busStopId,
-            name: s.busStopNameZh,
-            lat: parseFloat(s.latitude),
-            lng: parseFloat(s.longitude)
-          }));
-        } else if (currentCompany === 'KMB') {
-          const res = await fetch(`${API_KMB.routeStop}/${currentRoute}/${currentDir}/1`).then(r => r.json());
+        if (currentCompany === 'KMB') {
+          const res = await fetch(`${API_KMB_ROUTE_STOP}/${currentRoute}/${currentDir}/1`).then(r => r.json());
           const stopsData = res.data || [];
           stopList = await Promise.all(stopsData.map(async (s) => {
             if (stopCache.has('K_' + s.stop)) return { seq: s.seq, stopId: s.stop, ...stopCache.get('K_' + s.stop) };
-            const sRes = await fetch(`${API_KMB.stop}${s.stop}`).then(r => r.json());
+            const sRes = await fetch(`${API_KMB_STOP}${s.stop}`).then(r => r.json());
             const obj = { name: sRes.data?.name_tc || '未知', lat: parseFloat(sRes.data?.lat), lng: parseFloat(sRes.data?.long) };
             stopCache.set('K_' + s.stop, obj);
             return { seq: s.seq, stopId: s.stop, ...obj };
           }));
         } else if (currentCompany === 'CTB') {
-          const res = await fetch(`${API_CTB.routeStop}/${currentRoute}/${currentDir}`).then(r => r.json());
+          const res = await fetch(`${API_CTB_ROUTE_STOP}/${currentRoute}/${currentDir}`).then(r => r.json());
           const stopsData = res.data || [];
           stopList = await Promise.all(stopsData.map(async (s) => {
             if (stopCache.has('C_' + s.stop)) return { seq: s.seq, stopId: s.stop, ...stopCache.get('C_' + s.stop) };
-            const sRes = await fetch(`${API_CTB.stop}${s.stop}`).then(r => r.json());
+            const sRes = await fetch(`${API_CTB_STOP}${s.stop}`).then(r => r.json());
             const obj = { name: sRes.data?.name_tc || '未知', lat: parseFloat(sRes.data?.lat), lng: parseFloat(sRes.data?.long) };
             stopCache.set('C_' + s.stop, obj);
             return { seq: s.seq, stopId: s.stop, ...obj };
@@ -360,38 +506,18 @@
       });
     }
 
-    // 統一班次 ETA 查詢
     function refreshETAsOnly() {
+      if (currentCompany === 'MTR') {
+        loadMTRBusStops(currentRoute);
+        return;
+      }
+
       activeStopsToFetch.forEach(stop => {
         const etaBox = document.getElementById(`eta-box-${stop.stopId}`);
         if (!etaBox) return;
 
-        if (currentCompany === 'MTR') {
-          // 港鐵巴士 ETA
-          fetch(`${API_MTR.eta}?routeName=${currentRoute}`)
-            .then(r => r.json())
-            .then(data => {
-              const busList = (data.busStop || []).find(b => b.busStopId === stop.stopId);
-              const etas = busList?.bus || [];
-              if (!etas.length) {
-                etaBox.innerHTML = '<span class="text-xs text-slate-400">暫無班次數據或未開出</span>';
-                return;
-              }
-              etaBox.innerHTML = etas.slice(0, 3).map(item => {
-                const min = parseInt(item.departureTimeInSecond) / 60;
-                const label = min <= 1 ? '即將抵達' : `${Math.round(min)} 分鐘`;
-                return `
-                  <div class="flex justify-between items-center text-xs py-0.5">
-                    <span class="text-slate-600">港鐵巴士 #${item.busId || ''}</span>
-                    <span class="px-2 py-0.5 rounded font-black ${min <= 3 ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-800'}">${label}</span>
-                  </div>
-                `;
-              }).join('');
-            }).catch(() => { etaBox.innerHTML = '<span class="text-xs text-red-400">無法獲取 ETA</span>'; });
-
-        } else if (currentCompany === 'KMB') {
-          // 九巴 ETA
-          fetch(`${API_KMB.eta}/${stop.stopId}/${currentRoute}/1`)
+        if (currentCompany === 'KMB') {
+          fetch(`${API_KMB_ETA}/${stop.stopId}/${currentRoute}/1`)
             .then(r => r.json())
             .then(json => {
               const etas = (json.data || []).filter(item => item.route === currentRoute);
@@ -399,8 +525,7 @@
             }).catch(() => { etaBox.innerHTML = '<span class="text-xs text-red-400">無法獲取 ETA</span>'; });
 
         } else if (currentCompany === 'CTB') {
-          // 城巴 ETA
-          fetch(`${API_CTB.eta}/${stop.stopId}/${currentRoute}`)
+          fetch(`${API_CTB_ETA}/${stop.stopId}/${currentRoute}`)
             .then(r => r.json())
             .then(json => {
               const etas = (json.data || []).filter(item => item.dir === (currentDir === 'outbound' ? 'O' : 'I'));
@@ -429,7 +554,6 @@
       }).join('');
     }
 
-    // 倒數機制
     function startAutoRefresh() {
       clearInterval(refreshInterval);
       countdownSec = 30;
@@ -451,6 +575,7 @@
       if (e.key === 'Enter') searchRoute();
     });
 
+    initCatalog();
     loadHistory();
   </script>
 </body>
