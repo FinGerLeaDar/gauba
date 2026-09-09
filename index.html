@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     button, input { touch-action: manipulation; }
-    /* 優化 PC 橫向滾動條外觀 */
     .custom-scrollbar::-webkit-scrollbar { height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -27,7 +26,7 @@
       <span class="text-xl">🧭</span>
       <div>
         <h1 class="text-base font-black tracking-wide leading-none">全港巴士實時雷達</h1>
-        <span class="text-[10px] text-slate-400">極速快取架構 · GPS 智能推薦</span>
+        <span class="text-[10px] text-slate-400">極速快取架構 · GPS 鎖定導航</span>
       </div>
     </div>
     <div id="refresh-badge" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-slate-300 hidden">
@@ -100,22 +99,32 @@
             </div>
           </div>
 
-          <!-- 模式 2: 點對點目的地搜尋 -->
+          <!-- 模式 2: 點對點目的地搜尋 (帶 GPS 強制鎖定指示) -->
           <div id="panel-plan" class="space-y-2.5">
+            
+            <!-- GPS 狀態條 -->
+            <div class="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span id="gps-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                <span id="gps-status-text" class="text-slate-600 truncate">正在獲取目前 GPS 定位...</span>
+              </div>
+              <button id="btn-re-gps" class="text-blue-600 hover:underline shrink-0 ml-1 text-[11px]">重新定位</button>
+            </div>
+
             <div class="relative">
               <div class="flex items-center border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white">
                 <span class="text-xs font-black text-rose-600 mr-2 shrink-0">🔴 目的地</span>
-                <input type="text" id="input-dest" value="天水圍"
+                <input type="text" id="input-dest" value="TSW"
                        class="w-full bg-transparent font-bold text-sm focus:outline-none" 
-                       placeholder="輸入想去邊 (例: 天水圍, 黃大仙, 銅鑼灣)" autocomplete="off" />
+                       placeholder="輸入想去邊 (例: TSW, YL, MK, 黃大仙)" autocomplete="off" />
               </div>
               <div id="dest-suggest-box" class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-48 overflow-y-auto hidden z-50 divide-y divide-slate-100"></div>
             </div>
 
-            <!-- 匹配結果 Chips 區域 (支援 PC 左右滾動) -->
+            <!-- 匹配結果 Chips 區域 -->
             <div id="matched-routes-bar" class="space-y-1.5 pt-1">
               <div class="flex justify-between items-center text-[11px] font-bold text-slate-400">
-                <span>直達路線 (已按你身邊距離排序):</span>
+                <span>直達路線 (已按身邊最近上車站排序):</span>
                 <div class="flex gap-1">
                   <button id="btn-scroll-left" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">‹</button>
                   <button id="btn-scroll-right" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">›</button>
@@ -263,13 +272,30 @@
     setInterval(updateShuttleWidget, 1000);
     updateShuttleWidget();
 
-    // ==================== 2. 全港巴士路線庫與幹道索引 ====================
-    const HK_PLACES = [
-      "黃大仙", "元朗", "天水圍", "屯門", "觀塘", "旺角", "尖沙咀", "中環", "金鐘", "灣仔", 
-      "銅鑼灣", "沙田", "荃灣", "葵芳", "深水埗", "紅磡", "九龍灣", "大埔", "將軍澳", "東涌", "機場", "奧運"
-    ];
+    // ==================== 2. 香港地名 Short Form 字典 ====================
+    const PLACE_SHORTFORMS = {
+      "YL": "元朗", "YUEN LONG": "元朗",
+      "TSW": "天水圍", "TIN SHUI WAI": "天水圍",
+      "TM": "屯門", "TUEN MUN": "屯門",
+      "MK": "旺角", "MONG KOK": "旺角",
+      "CWB": "銅鑼灣", "CAUSEWAY BAY": "銅鑼灣",
+      "WTS": "黃大仙", "WONG TAI SIN": "黃大仙",
+      "KT": "觀塘", "KWUN TONG": "觀塘",
+      "TST": "尖沙咀", "TSIM SHA TSUI": "尖沙咀",
+      "ST": "沙田", "SHA TIN": "沙田",
+      "TW": "荃灣", "TSUEN WAN": "荃灣",
+      "TKO": "將軍澳", "TSEUNG KWAN O": "將軍澳",
+      "SSP": "深水埗", "SHAM SHUI PO": "深水埗",
+      "C": "中環", "CENTRAL": "中環",
+      "OLY": "奧運", "OLYMPIC": "奧運"
+    };
 
-    // 全港核心地標直達線映射 (包含各區幹道)
+    function normalizePlace(text) {
+      if (!text) return '';
+      const upper = text.trim().toUpperCase();
+      return PLACE_SHORTFORMS[upper] || text.trim();
+    }
+
     const CORRIDOR_INDEX = {
       "天水圍": ["265B", "269B", "269C", "269D", "69X", "69M", "969", "276A", "276B", "E36A", "E37", "K73", "K75P", "K76"],
       "元朗": ["268C", "268B", "68M", "68X", "968", "276", "276P", "53", "64K", "B1", "E36", "K73", "K65", "K66", "K68"],
@@ -307,6 +333,9 @@
     const matchedRoutesChips = document.getElementById('matched-routes-chips');
     const btnScrollLeft = document.getElementById('btn-scroll-left');
     const btnScrollRight = document.getElementById('btn-scroll-right');
+    const gpsStatusText = document.getElementById('gps-status-text');
+    const gpsDot = document.getElementById('gps-dot');
+    const btnReGps = document.getElementById('btn-re-gps');
 
     const dirPanel = document.getElementById('dir-panel');
     const dirButtons = document.getElementById('dir-buttons');
@@ -325,28 +354,7 @@
     let nearestStopIndex = 0;
     let refreshInterval = null;
     let countdownSec = 30;
-
-    tabRoute.onclick = () => {
-      tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
-      tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
-      panelRoute.classList.remove('hidden');
-      panelPlan.classList.add('hidden');
-    };
-
-    tabPlan.onclick = () => {
-      tabPlan.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
-      tabRoute.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
-      panelPlan.classList.remove('hidden');
-      panelRoute.classList.add('hidden');
-    };
-
-    // PC 滑鼠左右滑動控制
-    btnScrollLeft.onclick = () => { matchedRoutesChips.scrollBy({ left: -200, behavior: 'smooth' }); };
-    btnScrollRight.onclick = () => { matchedRoutesChips.scrollBy({ left: 200, behavior: 'smooth' }); };
-    matchedRoutesChips.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      matchedRoutesChips.scrollLeft += e.deltaY;
-    });
+    let cachedUserPos = null; // 全域 GPS 快取
 
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
@@ -356,16 +364,67 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    function getUserLocation() {
+    // ==================== 核心：強制同步獲取精確 GPS ====================
+    function ensureUserLocation(force = false) {
+      if (cachedUserPos && !force) return Promise.resolve(cachedUserPos);
+
+      gpsStatusText.textContent = '正在定位你的真實 GPS 座標...';
+      gpsDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+
       return new Promise((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
+        if (!navigator.geolocation) {
+          gpsStatusText.textContent = '瀏覽器不支援定位功能';
+          gpsDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+          return resolve(null);
+        }
+
         navigator.geolocation.getCurrentPosition(
-          p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-          () => resolve(null),
-          { timeout: 5000, enableHighAccuracy: true }
+          p => {
+            cachedUserPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+            gpsStatusText.textContent = `📍 已鎖定定位 (${cachedUserPos.lat.toFixed(3)}, ${cachedUserPos.lng.toFixed(3)})`;
+            gpsDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+            resolve(cachedUserPos);
+          },
+          (err) => {
+            gpsStatusText.textContent = '無法獲取定位，將使用預設推薦';
+            gpsDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+            resolve(null);
+          },
+          { timeout: 7000, enableHighAccuracy: true }
         );
       });
     }
+
+    btnReGps.onclick = async () => {
+      await ensureUserLocation(true);
+      triggerDestSearch(inputDest.value);
+    };
+
+    // Tab 切換：一進入【唔知搭咩？去邊度】先保證完成 GPS 定位
+    tabRoute.onclick = () => {
+      tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
+      tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
+      panelRoute.classList.remove('hidden');
+      panelPlan.classList.add('hidden');
+    };
+
+    tabPlan.onclick = async () => {
+      tabPlan.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
+      tabRoute.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
+      panelPlan.classList.remove('hidden');
+      panelRoute.classList.add('hidden');
+
+      // 強制先拿定位，再觸發搜尋
+      await ensureUserLocation();
+      triggerDestSearch(inputDest.value);
+    };
+
+    btnScrollLeft.onclick = () => { matchedRoutesChips.scrollBy({ left: -200, behavior: 'smooth' }); };
+    btnScrollRight.onclick = () => { matchedRoutesChips.scrollBy({ left: 200, behavior: 'smooth' }); };
+    matchedRoutesChips.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      matchedRoutesChips.scrollLeft += e.deltaY;
+    });
 
     async function initSystem() {
       try {
@@ -391,21 +450,26 @@
 
         statusBar.textContent = `✅ 資料庫就緒 (${allRoutesCatalog.length} 條路線)`;
         
-        // 預設自動按當前 GPS 比對目的地（天水圍）
-        triggerDestSearch('天水圍');
+        // 第一次載入時啟動 GPS 並搜尋預設天水圍
+        await ensureUserLocation();
+        triggerDestSearch('TSW');
       } catch (e) {
         statusBar.textContent = '⚠️ 初始化切換備用模式';
       }
     }
 
-    // ==================== 核心修正：GPS 距離優先排序 ====================
-    async function triggerDestSearch(dest) {
-      statusBar.textContent = `📍 正在讀取 GPS 並搜尋最近前往「${dest}」的路線...`;
+    // ==================== 核心：精確 GPS 距離比對與方向修正 ====================
+    async function triggerDestSearch(rawInput) {
+      const dest = normalizePlace(rawInput);
+      if (!dest) return;
+
+      statusBar.textContent = `📍 正在計算離你目前位置最近的前往「${dest}」路線...`;
       matchedRoutesChips.innerHTML = '<span class="text-xs text-slate-400 py-1">比對離你最近的上車站...</span>';
 
-      const pos = await getUserLocation();
+      // 確保獲取 GPS
+      const pos = await ensureUserLocation();
 
-      // 1. 篩選出所有直達目的地的候選路線
+      // 1. 檢索直達目的地的候選路線
       let candidates = new Set();
       Object.keys(CORRIDOR_INDEX).forEach(place => {
         if (dest.includes(place) || place.includes(dest)) {
@@ -418,56 +482,71 @@
 
       const candidateList = Array.from(candidates);
 
-      // 2. 如果有 GPS，實時計算每條線「距離你最近嘅上車站」有幾遠
+      // 2. 嚴格比對：哪一條線前往該目的地的方向，在用家附近有站？
       let scoredRoutes = [];
 
       if (pos) {
-        // 並行查詢候選路線中，前往該目的地的方向（例如：往天水圍）
         scoredRoutes = await Promise.all(
           candidateList.map(async (rt) => {
             const rObj = allRoutesCatalog.find(i => i.route === rt) || { route: rt, co: 'KMB' };
             try {
-              // 查訪九巴路線方向，判定邊個方向先係「往目的地」
               const [outRes, inRes] = await Promise.all([
                 fetch(`${API_KMB_ROUTE_STOP}/${rt}/outbound/1`).then(r => r.json()).catch(() => ({})),
                 fetch(`${API_KMB_ROUTE_STOP}/${rt}/inbound/1`).then(r => r.json()).catch(() => ({}))
               ]);
 
-              let bestDir = 'outbound';
-              let stops = outRes.data || [];
+              // 檢查去程與回程，哪一個方向的目的地才是真正吻合用家目的地
+              const outStops = outRes.data || [];
+              const inStops = inRes.data || [];
 
-              // 檢查路線資料中哪一個方向是前往目的地 (例如 dest_tc 包含天水圍)
-              const routeInfo = allRoutesCatalog.find(i => i.route === rt && i.dest.includes(dest));
-              if (!stops.length || (inRes.data?.length && routeInfo)) {
-                // 如果 inbound 才是去目的地
-                bestDir = 'inbound';
-                stops = inRes.data || stops;
+              // 取該路線在資料庫中的目的地
+              const outInfo = allRoutesCatalog.find(i => i.route === rt);
+              
+              // 決定優先方向：例如 265B 去天水圍，去程是 柏景灣 往 天恒，所以去程 (outbound) 就是往天水圍
+              let chosenDir = 'outbound';
+              let stopsToMeasure = outStops;
+
+              if (outInfo && !outInfo.dest.includes(dest) && inStops.length) {
+                chosenDir = 'inbound';
+                stopsToMeasure = inStops;
               }
 
-              // 計算沿線所有站離用家的最短距離
+              // 計算沿線所有停站離用家目前座標的距離
               let minStopDist = Infinity;
-              (stops || []).forEach(s => {
+              let nearestStopName = '';
+
+              (stopsToMeasure || []).forEach(s => {
                 const sData = globalStopMap.get('KMB_' + s.stop);
                 if (sData) {
                   const d = getDistance(pos.lat, pos.lng, sData.lat, sData.lng);
-                  if (d < minStopDist) minStopDist = d;
+                  if (d < minStopDist) {
+                    minStopDist = d;
+                    nearestStopName = sData.name;
+                  }
                 }
               });
 
-              return { route: rt, co: rObj.co, dist: minStopDist, targetDir: bestDir };
+              return {
+                route: rt,
+                co: rObj.co,
+                dist: minStopDist,
+                nearestStopName,
+                targetDir: chosenDir
+              };
             } catch (e) {
-              return { route: rt, co: rObj.co, dist: 999999, targetDir: 'outbound' };
+              return { route: rt, co: rObj.co, dist: 999999, nearestStopName: '', targetDir: 'outbound' };
             }
           })
         );
 
-        // 核心排序：離你最近嘅上車線（例如 265B 在奧運約 300 米）排在最前面！
+        // 核心排序：離你真實位置最近的排第一！
         scoredRoutes.sort((a, b) => a.dist - b.dist);
       } else {
         scoredRoutes = candidateList.map(rt => ({
           route: rt,
           co: (allRoutesCatalog.find(i => i.route === rt) || {}).co || 'KMB',
           dist: 0,
+          nearestStopName: '',
           targetDir: 'outbound'
         }));
       }
@@ -483,7 +562,7 @@
 
       scoredRoutes.slice(0, 12).forEach((item, idx) => {
         const chip = document.createElement('button');
-        const distLabel = (item.dist && item.dist < 10000) ? `(${Math.round(item.dist)}m)` : '';
+        const distLabel = (item.dist && item.dist < 10000) ? `(約${Math.round(item.dist)}m)` : '';
         chip.className = `px-3 py-1.5 rounded-xl text-xs font-black border shrink-0 transition flex items-center gap-1 ${
           idx === 0 ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
         }`;
@@ -496,25 +575,55 @@
         matchedRoutesChips.appendChild(chip);
       });
 
-      // 自動加載離你最近的第一條路線（例如 265B），並自動鎖定前往天水圍的方向！
+      // 自動選取最近第一條 (身在奧運即自動鎖定 265B，並選中往天水圍方向)
       const topRoute = scoredRoutes[0];
       loadRouteFullTimeline(topRoute.route, topRoute.co, topRoute.targetDir);
     }
+
+    // 支援輸入即時辨識 Short Form
+    inputDest.addEventListener('input', (e) => {
+      const q = e.target.value.trim().toUpperCase();
+      if (!q) {
+        destSuggestBox.classList.add('hidden');
+        return;
+      }
+
+      // 比對短寫與地點
+      let matchedItems = [];
+      Object.keys(PLACE_SHORTFORMS).forEach(sf => {
+        if (sf.startsWith(q)) {
+          matchedItems.push({ label: `${sf} ➔ ${PLACE_SHORTFORMS[sf]}`, value: PLACE_SHORTFORMS[sf] });
+        }
+      });
+      Object.keys(CORRIDOR_INDEX).forEach(place => {
+        if (place.includes(q)) matchedItems.push({ label: place, value: place });
+      });
+
+      destSuggestBox.innerHTML = '';
+      if (!matchedItems.length) {
+        destSuggestBox.classList.add('hidden');
+        return;
+      }
+
+      matchedItems.slice(0, 6).forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'px-3.5 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-2 text-xs font-bold text-slate-700';
+        row.innerHTML = `<span>📍 地點:</span> <span class="text-blue-600 font-black">${m.label}</span>`;
+        row.onclick = () => {
+          inputDest.value = m.value;
+          destSuggestBox.classList.add('hidden');
+          triggerDestSearch(m.value);
+        };
+        destSuggestBox.appendChild(row);
+      });
+      destSuggestBox.classList.remove('hidden');
+    });
 
     inputDest.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') triggerDestSearch(inputDest.value.trim());
     });
 
-    btnQuickReverse.onclick = () => {
-      if (availableDirs.length > 1) {
-        currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
-        renderDirButtons();
-        renderTimelineFast();
-        statusBar.textContent = `🔄 路線 ${currentRoute}：已掉轉方向 (${currentDir === 'outbound' ? '去程' : '回程'})`;
-      }
-    };
-
-    // ==================== 載入路線與時間軸 ====================
+    // ==================== 載入全線時間軸與正確方向 ====================
     async function loadRouteFullTimeline(route, company = 'KMB', preferredDir = null) {
       currentRoute = route;
       currentCompany = company;
@@ -526,7 +635,7 @@
       refreshBadge.classList.add('hidden');
 
       const [pos, kmbOut, kmbIn, ctbOut, ctbIn] = await Promise.all([
-        getUserLocation(),
+        ensureUserLocation(),
         fetch(`${API_KMB_ROUTE_STOP}/${route}/outbound/1`).then(r => r.json()).catch(() => ({})),
         fetch(`${API_KMB_ROUTE_STOP}/${route}/inbound/1`).then(r => r.json()).catch(() => ({})),
         fetch(`${API_CTB_ROUTE_STOP}/${route}/outbound`).then(r => r.json()).catch(() => ({})),
@@ -548,12 +657,7 @@
         return;
       }
 
-      // 自動採用正確前往目的地的方向
-      if (preferredDir && availableDirs.includes(preferredDir)) {
-        currentDir = preferredDir;
-      } else {
-        currentDir = availableDirs[0];
-      }
+      currentDir = (preferredDir && availableDirs.includes(preferredDir)) ? preferredDir : availableDirs[0];
 
       renderDirButtons();
       renderTimelineFast(pos);
@@ -580,7 +684,7 @@
     }
 
     async function renderTimelineFast(pos = null) {
-      if (!pos) pos = await getUserLocation();
+      if (!pos) pos = await ensureUserLocation();
 
       let rawStops = [];
       if (currentCompany === 'KMB') {
@@ -620,7 +724,7 @@
             }
           }
         });
-        statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定身邊最近車站【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
+        statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定最近上車點【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
       } else {
         statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站)`;
       }
