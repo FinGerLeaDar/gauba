@@ -26,7 +26,7 @@
       <span class="text-xl">🧭</span>
       <div>
         <h1 class="text-base font-black tracking-wide leading-none">全港巴士實時雷達</h1>
-        <span class="text-[10px] text-slate-400">極速快取架構 · 簡潔首頁</span>
+        <span class="text-[10px] text-slate-400">官方實時對齊 · 智能導航</span>
       </div>
     </div>
     <div id="refresh-badge" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-slate-300 hidden">
@@ -65,10 +65,10 @@
           </div>
         </div>
 
-        <!-- 搜尋主卡片 (預設顯示「查路線號碼」) -->
+        <!-- 搜尋主卡片 -->
         <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-3 relative z-40">
           
-          <!-- 功能切換 Tab (預設高亮左邊 Tab) -->
+          <!-- 功能切換 Tab -->
           <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-black">
             <button id="tab-route" class="flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black">
               <span>🚌</span> 查路線號碼
@@ -78,11 +78,11 @@
             </button>
           </div>
 
-          <!-- 模式 1: 純路線搜尋 (首頁預設顯示) -->
+          <!-- 模式 1: 純路線搜尋 -->
           <div id="panel-route" class="space-y-2.5 relative">
             <div class="relative">
               <div class="flex gap-1.5 items-center">
-                <input type="text" id="route-input" placeholder="輸入路線 (例: 69M, K73, 265B)" 
+                <input type="text" id="route-input" placeholder="輸入路線 (例: 265B, 69M, K73)" 
                        inputmode="text" autocapitalize="characters" autocomplete="off"
                        class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-black text-base uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white min-w-0" />
                 
@@ -95,13 +95,11 @@
                   搵車
                 </button>
               </div>
-
-              <!-- 下拉建議選單 -->
               <div id="route-suggest-box" class="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-60 overflow-y-auto hidden z-50 divide-y divide-slate-100"></div>
             </div>
           </div>
 
-          <!-- 模式 2: 點對點目的地搜尋 (預設隱藏且內容全空) -->
+          <!-- 模式 2: 點對點目的地搜尋 -->
           <div id="panel-plan" class="hidden space-y-2.5 relative">
             
             <!-- GPS 狀態條 -->
@@ -124,7 +122,6 @@
             <div class="relative">
               <div class="flex items-center border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white">
                 <span class="text-xs font-black text-rose-600 mr-2 shrink-0">🔴 目的地</span>
-                <!-- 預設乾淨全空，不再硬塞天水圍 -->
                 <input type="text" id="input-dest" value=""
                        class="w-full bg-transparent font-bold text-sm focus:outline-none" 
                        placeholder="輸入想去邊 (例: TSW, YL, MK, 黃大仙)" autocomplete="off" />
@@ -132,7 +129,7 @@
               <div id="dest-suggest-box" class="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-48 overflow-y-auto hidden z-50 divide-y divide-slate-100"></div>
             </div>
 
-            <!-- 推薦路線 Chips (預設隱藏) -->
+            <!-- 推薦路線 Chips 區域 -->
             <div id="matched-routes-bar" class="hidden space-y-1.5 pt-1">
               <div class="flex justify-between items-center text-[11px] font-bold text-slate-400">
                 <span>你附近直達路線 (1.5km 步行圈內):</span>
@@ -156,12 +153,12 @@
 
       </div>
 
-      <!-- 右側路線軸展示區 (首頁乾淨全空提示) -->
+      <!-- 右側路線軸展示區 -->
       <div class="md:col-span-7 lg:col-span-7 space-y-3">
         <div id="timeline-container" class="space-y-3 relative z-10">
           <div class="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-2">
             <div class="text-2xl">🚌</div>
-            <div class="text-sm font-bold text-slate-600">請在左側輸入路線號碼 (例: 69M, K73, 265B)</div>
+            <div class="text-sm font-bold text-slate-600">請在左側輸入路線號碼 (例: 265B, 69M, K73)</div>
             <div class="text-xs text-slate-400">或切換至「唔知搭咩？去邊度」搜尋附近直達車</div>
           </div>
         </div>
@@ -367,7 +364,7 @@
     const API_CTB_ROUTES = 'https://rt.data.gov.hk/v2/transport/citybus/route/CTB';
     const API_KMB_ALL_STOPS = 'https://data.etabus.gov.hk/v1/transport/kmb/stop';
     const API_KMB_ROUTE_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/route-stop';
-    const API_KMB_ETA = 'https://data.etabus.gov.hk/v1/transport/kmb/eta';
+    const API_KMB_ETA_ROUTE_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/eta';
     const API_CTB_ROUTE_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB';
     const API_CTB_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/stop/';
     const API_CTB_ETA = 'https://rt.data.gov.hk/v2/transport/citybus/eta/CTB';
@@ -475,7 +472,6 @@
       if (inputDest.value.trim()) triggerDestSearch(inputDest.value);
     };
 
-    // Tab 切換：預設首頁在【查路線號碼】
     tabRoute.onclick = () => {
       tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
       tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
@@ -489,7 +485,6 @@
       panelPlan.classList.remove('hidden');
       panelRoute.classList.add('hidden');
 
-      // 只有當用家確實輸入了目的地時，才啟動搜尋
       await ensureUserLocation();
       if (inputDest.value.trim()) {
         triggerDestSearch(inputDest.value);
@@ -503,7 +498,6 @@
       matchedRoutesChips.scrollLeft += e.deltaY;
     });
 
-    // 乾淨初始化：只快取資料庫，絕不自動出車
     async function initSystem() {
       try {
         statusBar.textContent = '⚡ 載入全港路線庫中...';
@@ -527,7 +521,6 @@
           });
         });
 
-        // 首頁乾淨狀態，絕不自動 triggerDestSearch！
         statusBar.textContent = `✅ 資料庫就緒 (${allRoutesCatalog.length} 條路線)`;
       } catch (e) {
         allRoutesCatalog = MTR_BUS_ROUTES;
@@ -535,7 +528,7 @@
       }
     }
 
-    // ==================== 即時路線模糊建議 (Auto Suggestion) ====================
+    // ==================== 即時路線模糊建議 ====================
     routeInput.addEventListener('input', (e) => {
       const q = e.target.value.trim().toUpperCase();
       if (!q) {
@@ -582,7 +575,6 @@
       routeSuggestBox.classList.remove('hidden');
     });
 
-    // 點擊「搵車」按鈕
     btnSearchSingleRoute.onclick = () => {
       const r = routeInput.value.trim().toUpperCase();
       if (!r) return;
@@ -903,7 +895,7 @@
         if (buses.length) {
           etaStr = buses.slice(0, 2).map(b => {
             const sec = parseInt(b.departureTimeInSecond);
-            const min = Math.round(sec / 60);
+            const min = Math.ceil(sec / 60);
             const label = min <= 1 ? '即將開出' : `${min} 分鐘`;
             return `<span class="inline-block mr-2 px-2 py-0.5 rounded text-xs font-black ${min <= 3 ? 'bg-rose-600 text-white animate-pulse' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}">🚍 ${label}</span>`;
           }).join('');
@@ -993,7 +985,7 @@
           statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定最近上車點【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
         }
       } else {
-        statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站 · 未定位)`;
+        statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站)`;
       }
 
       drawTimelineUI();
@@ -1001,7 +993,6 @@
       startAutoRefresh();
     }
 
-    // 自然優雅的最近上車站卡片展示
     function drawTimelineUI() {
       timelineContainer.innerHTML = '';
       const listWrapper = document.createElement('div');
@@ -1070,7 +1061,7 @@
               </div>
 
               <div id="tl-eta-${stop.stopId}" class="mt-2 space-y-1 pt-1.5 border-t border-blue-100">
-                <span class="text-[11px] text-slate-400">載入班次中...</span>
+                <span class="text-[11px] text-slate-400">載入實時班次中...</span>
               </div>
             </div>
           `;
@@ -1082,7 +1073,7 @@
                 <span class="text-sm font-bold ${isPassed ? 'text-slate-300 line-through' : 'text-slate-700'}">${stop.name}</span>
                 <span class="text-[10px] text-slate-300">(${stop.stopId})</span>
               </div>
-              ${!isPassed ? `<div id="tl-eta-${stop.stopId}" class="mt-1 space-y-1"><span class="text-[11px] text-slate-400">載入班次中...</span></div>` : ''}
+              ${!isPassed ? `<div id="tl-eta-${stop.stopId}" class="mt-1 space-y-1"><span class="text-[11px] text-slate-400">載入實時班次中...</span></div>` : ''}
             </div>
           `;
         }
@@ -1107,6 +1098,7 @@
       }, 150);
     }
 
+    // ==================== 核心修正：嚴格校準九巴官方 ETA ====================
     function refreshUpcomingETAs() {
       const startIndex = nearestStopIndex === -1 ? 0 : nearestStopIndex;
       const activeTargets = allRouteStops.slice(startIndex, startIndex + 4);
@@ -1115,40 +1107,71 @@
         const etaBox = document.getElementById(`tl-eta-${stop.stopId}`);
         if (!etaBox) return;
 
-        const url = currentCompany === 'KMB' 
-          ? `${API_KMB_ETA}/${stop.stopId}/${currentRoute}/1`
-          : `${API_CTB_ETA}/${stop.stopId}/${currentRoute}`;
+        if (currentCompany === 'KMB') {
+          // 終極修復：指定九巴官方 /eta/{stop_id}/{route}/{service_type}
+          fetch(`${API_KMB_ETA_ROUTE_STOP}/${stop.stopId}/${currentRoute}/1`)
+            .then(r => r.json())
+            .then(json => {
+              const expectedDir = (currentDir === 'outbound') ? 'O' : 'I';
+              // 嚴格雙重過濾：路線必須相符，且方向 (dir) 必須吻合當前前進方向！
+              let etas = (json.data || []).filter(item => {
+                const matchRoute = item.route === currentRoute;
+                const matchDir = !item.dir || item.dir === expectedDir;
+                const matchService = !item.service_type || item.service_type === 1;
+                return matchRoute && matchDir && matchService;
+              });
 
-        fetch(url).then(r => r.json()).then(json => {
-          let etas = json.data || [];
-          if (currentCompany === 'CTB') {
-            etas = etas.filter(e => e.dir === (currentDir === 'outbound' ? 'O' : 'I'));
-          } else {
-            etas = etas.filter(e => e.route === currentRoute);
-          }
+              renderOfficialETARows(etaBox, etas);
+            })
+            .catch(() => { etaBox.innerHTML = '<span class="text-[10px] text-rose-400">無法獲取</span>'; });
 
-          if (!etas.length) {
-            etaBox.innerHTML = '<span class="text-[10px] text-slate-400">暫無班次</span>';
-            return;
-          }
-
-          etaBox.innerHTML = etas.slice(0, 2).map((item, idx) => {
-            if (!item.eta) return `<span class="text-[10px] text-slate-400 mr-2">第${idx+1}班: 未開出</span>`;
-            const diffMin = Math.round((new Date(item.eta) - new Date()) / 60000);
-            const label = diffMin <= 0 ? '即將抵達' : `${diffMin} 分鐘`;
-            const isUrgent = diffMin <= 3;
-            return `
-              <span class="inline-flex items-center gap-1 mr-2 px-2 py-0.5 rounded text-xs font-black ${
-                isUrgent ? 'bg-rose-600 text-white animate-pulse' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              }">
-                🚍 ${label}
-              </span>
-            `;
-          }).join('');
-        }).catch(() => {
-          etaBox.innerHTML = '<span class="text-[10px] text-rose-400">無法獲取</span>';
-        });
+        } else if (currentCompany === 'CTB') {
+          fetch(`${API_CTB_ETA}/${stop.stopId}/${currentRoute}`)
+            .then(r => r.json())
+            .then(json => {
+              const expectedDir = (currentDir === 'outbound') ? 'O' : 'I';
+              let etas = (json.data || []).filter(e => e.dir === expectedDir);
+              renderOfficialETARows(etaBox, etas);
+            })
+            .catch(() => { etaBox.innerHTML = '<span class="text-[10px] text-rose-400">無法獲取</span>'; });
+        }
       });
+    }
+
+    function renderOfficialETARows(container, etas) {
+      if (!etas || !etas.length) {
+        container.innerHTML = '<span class="text-[10px] text-slate-400">暫無班次數據</span>';
+        return;
+      }
+
+      const now = new Date();
+      container.innerHTML = etas.slice(0, 3).map((item, idx) => {
+        if (!item.eta) {
+          return `<span class="text-[10px] text-slate-400 mr-2">第${idx+1}班: 未開出</span>`;
+        }
+
+        const etaDate = new Date(item.eta);
+        const diffMs = etaDate - now;
+        // 對齊九巴官方 App 算法：以無條件進位 (Math.ceil) 顯示剩餘分鐘
+        const minLeft = Math.ceil(diffMs / 60000);
+        
+        let label = '';
+        if (minLeft <= 1) label = '即將抵達';
+        else label = `${minLeft} 分鐘`;
+
+        // 標記預定班次
+        const isScheduled = item.rmk_tc && item.rmk_tc.includes('預定');
+        const badgeTag = isScheduled ? ' 預定' : '';
+        const isUrgent = minLeft <= 3;
+
+        return `
+          <span class="inline-flex items-center gap-1 mr-2 px-2 py-0.5 rounded text-xs font-black ${
+            isUrgent ? 'bg-rose-600 text-white animate-pulse' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+          }">
+            🚍 ${label}${badgeTag}
+          </span>
+        `;
+      }).join('');
     }
 
     function startAutoRefresh() {
