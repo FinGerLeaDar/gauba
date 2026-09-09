@@ -70,10 +70,10 @@
           
           <!-- 功能切換 Tab -->
           <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-black">
-            <button id="tab-route" class="flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black">
+            <button id="tab-route" class="flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black">
               <span>🚌</span> 查路線號碼
             </button>
-            <button id="tab-plan" class="flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black">
+            <button id="tab-plan" class="flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black">
               <span>📍</span> 唔知搭咩？去邊度
             </button>
           </div>
@@ -132,7 +132,7 @@
             <!-- 推薦路線 Chips 區域 -->
             <div id="matched-routes-bar" class="hidden space-y-1.5 pt-1">
               <div class="flex justify-between items-center text-[11px] font-bold text-slate-400">
-                <span>你附近直達路線 (1.5km 步行圈內):</span>
+                <span>推薦直達路線:</span>
                 <div class="flex gap-1">
                   <button id="btn-scroll-left" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">‹</button>
                   <button id="btn-scroll-right" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">›</button>
@@ -142,7 +142,7 @@
             </div>
           </div>
 
-          <!-- 方向狀態列 (智慧切換按鈕，預設自動選取) -->
+          <!-- 方向切換面板 -->
           <div id="dir-panel" class="hidden flex items-center gap-2 pt-2 border-t border-slate-100">
             <div id="dir-buttons" class="flex flex-1 gap-1.5"></div>
           </div>
@@ -472,6 +472,7 @@
       if (inputDest.value.trim()) triggerDestSearch(inputDest.value);
     };
 
+    // Tab 切換：預設首頁在【查路線號碼】（絕不自動搜尋）
     tabRoute.onclick = () => {
       tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
       tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
@@ -610,11 +611,11 @@
         currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
         renderDirButtons();
         renderTimelineFast();
-        statusBar.textContent = `🔄 路線 ${currentRoute}：已掉轉方向`;
+        statusBar.textContent = `🔄 路線 ${currentRoute}：已手動掉轉方向`;
       }
     };
 
-    // ==================== 核心：目的地搜尋與全自動方向判定 ====================
+    // ==================== 核心修正：修復 1.5km 步行圈過濾（防止 265B 被過濾掉） ====================
     async function triggerDestSearch(rawInput) {
       const dest = normalizePlace(rawInput);
       if (!dest) {
@@ -624,7 +625,7 @@
       }
 
       statusBar.textContent = `📍 正在搜尋身邊可步行的直達「${dest}」路線...`;
-      matchedRoutesChips.innerHTML = '<span class="text-xs text-slate-400 py-1">計算附近 1.5km 車站中...</span>';
+      matchedRoutesChips.innerHTML = '<span class="text-xs text-slate-400 py-1">計算附近車站中...</span>';
 
       const pos = await ensureUserLocation();
 
@@ -654,7 +655,6 @@
               const outStops = outRes.data || [];
               const inStops = inRes.data || [];
 
-              // 計算去程距離
               let outMinDist = Infinity;
               let outNearestStop = null;
               outStops.forEach(s => {
@@ -668,7 +668,6 @@
                 }
               });
 
-              // 計算回程距離
               let inMinDist = Infinity;
               let inNearestStop = null;
               inStops.forEach(s => {
@@ -682,28 +681,24 @@
                 }
               });
 
-              // 終極全自動判斷：哪個方向的「終點站」才是你的目的地？
-              // 九巴 catalog: dest 是去程終點，orig 是回程終點
-              const isOutGoingToDest = rObj.dest.includes(dest);
-              const isInGoingToDest = rObj.orig.includes(dest);
+              const isOutDest = rObj.dest.includes(dest);
+              const isInDest = rObj.orig.includes(dest);
 
-              let autoDir = 'outbound';
+              let chosenDir = 'outbound';
               let finalDist = outMinDist;
               let chosenStop = outNearestStop;
 
-              if (isInGoingToDest && inStops.length) {
-                // 目的地在回程終點（例如 265B 柏景灣往天恒），自動鎖定回程！
-                autoDir = 'inbound';
+              if (isInDest && inStops.length) {
+                chosenDir = 'inbound';
                 finalDist = inMinDist;
                 chosenStop = inNearestStop;
-              } else if (isOutGoingToDest && outStops.length) {
-                autoDir = 'outbound';
+              } else if (isOutDest && outStops.length) {
+                chosenDir = 'outbound';
                 finalDist = outMinDist;
                 chosenStop = outNearestStop;
               } else {
-                // 若無文字直屬，自動挑選離用家最近且合理的單邊
                 if (inMinDist < outMinDist && inStops.length) {
-                  autoDir = 'inbound';
+                  chosenDir = 'inbound';
                   finalDist = inMinDist;
                   chosenStop = inNearestStop;
                 }
@@ -715,7 +710,7 @@
                 route: rt,
                 co: rObj.co,
                 dist: finalDist,
-                targetDir: autoDir,
+                targetDir: chosenDir,
                 nearestStop: chosenStop
               };
             } catch (e) {
@@ -724,11 +719,12 @@
           })
         );
 
-        const reachableRoutes = scoredRoutes.filter(r => r.dist < 1500);
+        // 核心修復：如果 1.5km 內抓不到（可能因為 API 未必全部有快取），放寬至 3km，確保 265B 唔會消失！
+        let reachableRoutes = scoredRoutes.filter(r => r.dist < 3000);
         if (reachableRoutes.length > 0) {
           scoredRoutes = reachableRoutes.sort((a, b) => a.dist - b.dist);
         } else {
-          scoredRoutes = scoredRoutes.filter(r => r.dist < 10000).sort((a, b) => a.dist - b.dist);
+          scoredRoutes = scoredRoutes.filter(r => r.dist < 15000).sort((a, b) => a.dist - b.dist);
         }
 
       } else {
@@ -744,7 +740,7 @@
       matchedRoutesChips.innerHTML = '';
       if (!scoredRoutes.length) {
         matchedRoutesBar.classList.add('hidden');
-        statusBar.textContent = `⚠️ 你身邊 1.5km 內未搵到直達「${dest}」的路線`;
+        statusBar.textContent = `⚠️ 未搵到直達「${dest}」的路線`;
         return;
       }
 
@@ -760,13 +756,11 @@
         chip.onclick = () => {
           [...matchedRoutesChips.children].forEach(c => c.className = 'px-3 py-1.5 rounded-xl text-xs font-black border shrink-0 bg-white text-slate-800 border-slate-200');
           chip.className = 'px-3 py-1.5 rounded-xl text-xs font-black border shrink-0 bg-blue-600 text-white border-blue-600 shadow';
-          // 點擊 Chip 直接帶入自動算好的正確方向！
           loadRouteFullTimeline(item.route, item.co, item.targetDir);
         };
         matchedRoutesChips.appendChild(chip);
       });
 
-      // 自動載入真正第一名（自動帶入回程 inbound，完全免手動撳！）
       const topRoute = scoredRoutes[0];
       loadRouteFullTimeline(topRoute.route, topRoute.co, topRoute.targetDir);
     }
@@ -852,10 +846,8 @@
         return;
       }
 
-      // 全自動方向鎖定：優先採用傳入的 preferredDir (例如 inbound)
       currentDir = (preferredDir && availableDirs.includes(preferredDir)) ? preferredDir : availableDirs[0];
 
-      // 即時渲染方向按鈕列（並高亮正確選中之方向）
       renderDirButtons();
       renderTimelineFast(pos);
     }
@@ -929,7 +921,6 @@
       timelineContainer.innerHTML = html;
     }
 
-    // 智能渲染方向按鈕（直接帶出終點站名，直觀清楚）
     function renderDirButtons() {
       dirButtons.innerHTML = '';
       dirPanel.classList.remove('hidden');
@@ -940,7 +931,6 @@
         const btn = document.createElement('button');
         const isActive = dir === currentDir;
 
-        // 清楚標註目的地：例如 往天恒邨 / 往柏景灣
         let dirLabel = dir === 'outbound' ? '去程' : '回程';
         if (rInfo) {
           dirLabel = dir === 'outbound' ? `往 ${rInfo.dest}` : `往 ${rInfo.orig}`;
@@ -1125,7 +1115,6 @@
       }, 150);
     }
 
-    // ==================== ETA 讀取 (對齊官方算法) ====================
     function refreshUpcomingETAs() {
       const startIndex = nearestStopIndex === -1 ? 0 : nearestStopIndex;
       const activeTargets = allRouteStops.slice(startIndex, startIndex + 4);
