@@ -482,7 +482,6 @@
       }
     }
 
-    // ==================== 核心修正：嚴格過濾 1.5km 步行圈 + 徹底剔除遠距離線 ====================
     async function triggerDestSearch(rawInput) {
       const dest = normalizePlace(rawInput);
       if (!dest) return;
@@ -503,7 +502,6 @@
       });
 
       const candidateList = Array.from(candidates);
-
       let scoredRoutes = [];
 
       if (pos) {
@@ -519,7 +517,6 @@
               const outStops = outRes.data || [];
               const inStops = inRes.data || [];
 
-              // 計算去程沿線最短距離
               let outMinDist = Infinity;
               let outNearestStop = null;
               outStops.forEach(s => {
@@ -533,7 +530,6 @@
                 }
               });
 
-              // 計算回程沿線最短距離
               let inMinDist = Infinity;
               let inNearestStop = null;
               inStops.forEach(s => {
@@ -547,7 +543,6 @@
                 }
               });
 
-              // 判定前往目的地的方向
               const isOutDest = rObj.dest.includes(dest);
               const isInDest = rObj.orig.includes(dest);
 
@@ -571,7 +566,6 @@
                 }
               }
 
-              // 關鍵修復：如果距離未知，設為無限大，絕不允許變 0
               if (!finalDist || finalDist === Infinity || isNaN(finalDist)) {
                 finalDist = 999999;
               }
@@ -589,16 +583,11 @@
           })
         );
 
-        // 核心過濾：
-        // 1. 徹底斬走 dist == 999999 (拉唔到站或冇數據嘅線)
-        // 2. 嚴格限定只保留離用家 1500 米（1.5km 步行範圍）內有站嘅真正直達車！
-        // 3. 避免大西北 K 車、屯門短途線混入九龍！
         const reachableRoutes = scoredRoutes.filter(r => r.dist < 1500);
 
         if (reachableRoutes.length > 0) {
           scoredRoutes = reachableRoutes.sort((a, b) => a.dist - b.dist);
         } else {
-          // 如果 1.5km 內真係冇站，退回最接近的 5 條跨區幹線，但也必須按真實距離排
           scoredRoutes = scoredRoutes.filter(r => r.dist < 10000).sort((a, b) => a.dist - b.dist);
         }
 
@@ -636,7 +625,6 @@
         matchedRoutesChips.appendChild(chip);
       });
 
-      // 自動載入真正第一名（例如 265B，距離 334m）
       const topRoute = scoredRoutes[0];
       loadRouteFullTimeline(topRoute.route, topRoute.co, topRoute.targetDir);
     }
@@ -691,7 +679,6 @@
       }
     };
 
-    // ==================== 載入全線時間軸與精確最近站標註 ====================
     async function loadRouteFullTimeline(route, company = 'KMB', preferredDir = null) {
       currentRoute = route;
       currentCompany = company;
@@ -794,7 +781,7 @@
         });
         
         if (nearestStopIndex !== -1) {
-          statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定身邊最近車站【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
+          statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定最近上車點【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
         }
       } else {
         statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站 · 未定位)`;
@@ -805,6 +792,7 @@
       startAutoRefresh();
     }
 
+    // ==================== 視覺大重構：極致高顏值、自然無違和最近上車卡片 ====================
     function drawTimelineUI() {
       timelineContainer.innerHTML = '';
       const listWrapper = document.createElement('div');
@@ -828,54 +816,81 @@
         const isCurrent = hasPos && idx === nearestStopIndex;
         const isLast = idx === allRouteStops.length - 1;
 
+        // 連接線
         const lineHtml = isLast ? '' : `
-          <div class="absolute left-[11px] top-4 bottom-0 w-[3px] -z-0 ${isPassed ? 'bg-slate-200' : 'bg-emerald-400'}"></div>
+          <div class="absolute left-[11px] top-5 bottom-0 w-[3px] -z-0 ${isPassed ? 'bg-slate-200' : 'bg-emerald-400'}"></div>
         `;
 
+        // 節點圖標 (Node)
         let nodeHtml = '';
         if (isCurrent) {
           nodeHtml = `
-            <div class="relative z-10 flex items-center justify-center w-6 h-6 shrink-0 mt-0.5">
-              <div class="absolute w-full h-full bg-emerald-500 rounded-full animate-ping-slow opacity-75"></div>
-              <div class="w-4 h-4 bg-emerald-600 rounded-full border-2 border-white shadow-md flex items-center justify-center">
+            <div class="relative z-10 flex items-center justify-center w-6 h-6 shrink-0 mt-1">
+              <div class="absolute w-full h-full bg-blue-500 rounded-full animate-ping-slow opacity-75"></div>
+              <div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow flex items-center justify-center">
                 <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
               </div>
             </div>
           `;
         } else if (isPassed) {
           nodeHtml = `
-            <div class="relative z-10 flex items-center justify-center w-6 h-6 shrink-0 mt-0.5">
+            <div class="relative z-10 flex items-center justify-center w-6 h-6 shrink-0 mt-1">
               <div class="w-2.5 h-2.5 bg-slate-300 rounded-full"></div>
             </div>
           `;
         } else {
           nodeHtml = `
-            <div class="relative z-10 flex items-center justify-center w-6 h-6 shrink-0 mt-0.5">
+            <div class="relative z-10 flex items-center justify-center w-6 h-6 shrink-0 mt-1">
               <div class="w-3 h-3 bg-white border-2 border-emerald-500 rounded-full shadow-sm"></div>
             </div>
           `;
         }
 
-        const infoHtml = `
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-center">
+        // 站點主資訊結構 (徹底解決撞字折行問題)
+        let contentHtml = '';
+
+        if (isCurrent) {
+          // 當前站點：採用高質感輕量化卡片背景，距離獨立分行，自然不突兀
+          contentHtml = `
+            <div class="flex-1 min-w-0 bg-blue-50/70 border border-blue-200/80 p-2.5 rounded-xl shadow-xs">
               <div class="flex items-center gap-1.5">
-                <span class="text-[10px] ${isPassed ? 'text-slate-300' : (isCurrent ? 'text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-black' : 'text-slate-400')}">#${stop.seq}</span>
-                <span class="text-sm font-bold ${isPassed ? 'text-slate-300 line-through' : (isCurrent ? 'text-slate-900 font-black text-base' : 'text-slate-700')}">${stop.name}</span>
-                <span class="text-[10px] text-slate-300 font-medium">(${stop.stopId})</span>
-                ${isCurrent ? '<span class="text-[10px] bg-emerald-600 text-white font-black px-1.5 py-0.5 rounded-full shadow-sm">📍 最近上車</span>' : ''}
+                <span class="text-xs font-black text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">#${stop.seq}</span>
+                <span class="text-sm font-black text-slate-900">${stop.name}</span>
+                <span class="text-[10px] text-slate-400 font-normal">(${stop.stopId})</span>
               </div>
-              ${stop.dist !== undefined && isCurrent ? `<span class="text-xs font-black text-emerald-600">約 ${Math.round(stop.dist)}m</span>` : ''}
+              
+              <!-- 步行提示與距離 (獨立分行，告別肉酸圓形貼紙) -->
+              <div class="flex items-center gap-1 mt-1 text-xs font-bold text-blue-700">
+                <span class="text-xs">🚶</span>
+                <span>步行約 ${Math.round(stop.dist || 0)}m</span>
+                <span class="text-[10px] text-blue-500 font-medium">· 建議在此站上車</span>
+              </div>
+
+              <!-- ETA -->
+              <div id="tl-eta-${stop.stopId}" class="mt-2 space-y-1 pt-1.5 border-t border-blue-100">
+                <span class="text-[11px] text-slate-400">載入班次中...</span>
+              </div>
             </div>
-            ${!isPassed ? `<div id="tl-eta-${stop.stopId}" class="mt-1 space-y-1"><span class="text-[11px] text-slate-400">載入班次中...</span></div>` : ''}
-          </div>
-        `;
+          `;
+        } else {
+          // 一般站點
+          contentHtml = `
+            <div class="flex-1 min-w-0 py-0.5">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] ${isPassed ? 'text-slate-300' : 'text-slate-400 font-bold'}">#${stop.seq}</span>
+                <span class="text-sm font-bold ${isPassed ? 'text-slate-300 line-through' : 'text-slate-700'}">${stop.name}</span>
+                <span class="text-[10px] text-slate-300">(${stop.stopId})</span>
+              </div>
+              ${!isPassed ? `<div id="tl-eta-${stop.stopId}" class="mt-1 space-y-1"><span class="text-[11px] text-slate-400">載入班次中...</span></div>` : ''}
+            </div>
+          `;
+        }
 
         htmlBuffer += `
-          <div class="flex items-start gap-3 relative pb-6 last:pb-2" id="stop-node-${idx}">
+          <div class="flex items-start gap-3 relative pb-5 last:pb-2" id="stop-node-${idx}">
             ${lineHtml}
             ${nodeHtml}
-            ${infoHtml}
+            ${contentHtml}
           </div>
         `;
       });
