@@ -55,7 +55,6 @@
         </div>
       </div>
 
-      <!-- 隨後班次預告 -->
       <div class="pt-2 border-t border-white/15 flex justify-between items-center text-xs text-emerald-100" id="shuttle-upcoming">
         <span>隨後班次: 載入中...</span>
       </div>
@@ -65,7 +64,7 @@
     <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 relative z-40">
       <div class="relative">
         <div class="flex gap-2">
-          <input type="text" id="route-input" placeholder="路線 (例: K73, 98D, E22, 1A)" 
+          <input type="text" id="route-input" placeholder="路線 (例: 969, K73, 98D, 1A)" 
                  inputmode="text" autocapitalize="characters" autocomplete="off"
                  class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-lg uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" />
           <button id="btn-search-route" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl active:scale-95 transition text-base">
@@ -94,7 +93,7 @@
     </div>
 
     <!-- Status Bar -->
-    <div id="status-bar" class="text-xs text-slate-400 text-center font-medium">輸入路線號碼查詢班次</div>
+    <div id="status-bar" class="text-xs text-slate-400 text-center font-medium">載入全港路線庫中...</div>
 
     <!-- 列表展示區 -->
     <div id="results" class="space-y-3 relative z-10"></div>
@@ -102,9 +101,7 @@
   </main>
 
   <script>
-    // ==================== 1. 麗湖居專巴完整數據庫 ====================
-    // 平日 (星期一至五，公眾假期除外) - 尾班車 22:52
-    // # 代表不途經天水圍西鐵站
+    // ==================== 1. 麗湖居專巴數據庫 ====================
     const SCHEDULE_WEEKDAY = [
       "06:15", "06:25", "06:35", "06:43", "06:51", "06:58",
       "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58",
@@ -124,8 +121,6 @@
       "22:00", "22:07", "22:15", "22:22", "22:30", "22:37", "22:45", "22:52"
     ];
 
-    // 星期六、日及公眾假期 - 尾班車 00:00 (24:00)
-    // ◆ 代表途經麗湖居第 2 座落客
     const SCHEDULE_HOLIDAY = [
       "06:15", "06:25", "06:35", "06:43", "06:51", "06:58",
       "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58",
@@ -148,7 +143,6 @@
       "24:00"
     ];
 
-    // 判斷今日預設係咪週末 (0 = 週日, 6 = 週六)
     const todayDay = new Date().getDay();
     let isHolidayMode = (todayDay === 0 || todayDay === 6);
 
@@ -173,7 +167,6 @@
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const currentSeconds = now.getSeconds();
-
       const activeSchedule = isHolidayMode ? SCHEDULE_HOLIDAY : SCHEDULE_WEEKDAY;
       let upcoming = [];
 
@@ -181,7 +174,6 @@
         const isSkipMTR = rawItem.includes('#');
         const isViaBlock2 = rawItem.includes('◆');
         const cleanTime = rawItem.replace('#', '').replace('◆', '');
-        
         let [h, m] = cleanTime.split(':').map(Number);
         const totalMin = h * 60 + m;
 
@@ -218,7 +210,6 @@
 
       nextTimeEl.textContent = first.time;
 
-      // 標註提示
       if (first.isSkipMTR) {
         noteEl.innerHTML = '<span class="text-rose-200 bg-rose-900/60 px-2 py-0.5 rounded">⚠️ 不停西鐵站</span>';
       } else if (first.isViaBlock2) {
@@ -235,7 +226,6 @@
         countdownEl.className = 'text-3xl font-black text-amber-300';
       }
 
-      // 下 2 班預覽
       const rest = upcoming.slice(1, 3);
       if (rest.length) {
         upcomingEl.innerHTML = `
@@ -251,11 +241,10 @@
       }
     }
 
-    // 每秒即時倒數
     setInterval(updateShuttleWidget, 1000);
     updateShuttleWidget();
 
-    // ==================== 2. 全港巴士雷達邏輯 ====================
+    // ==================== 2. 全港巴士雷達核心 (KMB + CTB + MTR) ====================
     const MTR_BUS_ROUTES = [
       { route: "K73", orig: "天恒", dest: "元朗(西)", co: "MTR" },
       { route: "K74", orig: "天水圍市中心", dest: "凹頭 (循環線)", co: "MTR" },
@@ -285,6 +274,8 @@
     ];
 
     const API_KMB_ROUTES = 'https://data.etabus.gov.hk/v1/transport/kmb/route/';
+    const API_CTB_ROUTES = 'https://rt.data.gov.hk/v2/transport/citybus/route/CTB';
+
     const API_KMB_ROUTE_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/route-stop';
     const API_KMB_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/stop/';
     const API_KMB_ETA = 'https://data.etabus.gov.hk/v1/transport/kmb/eta';
@@ -295,8 +286,9 @@
 
     const API_MTR_BUS_ETA = 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule';
 
-    const ROUTES_CACHE_KEY = 'hk_all_routes_v4';
-    const HISTORY_KEY = 'hk_recent_routes_v4';
+    // 升級到 v5 清除舊九巴專屬 cache
+    const ROUTES_CACHE_KEY = 'hk_all_routes_v5';
+    const HISTORY_KEY = 'hk_recent_routes_v5';
 
     const routeInput = document.getElementById('route-input');
     const suggestionsBox = document.getElementById('suggestions-box');
@@ -340,36 +332,53 @@
       });
     }
 
+    // 關鍵修復：同時載入九巴 + 城巴 + 港鐵巴士全線清單
     async function initCatalog() {
       const cached = localStorage.getItem(ROUTES_CACHE_KEY);
       if (cached) {
         allRoutesCatalog = JSON.parse(cached);
-        statusBar.textContent = `✅ 路線庫已就緒 (${allRoutesCatalog.length} 條路線)`;
+        statusBar.textContent = `✅ 路線庫已就緒 (${allRoutesCatalog.length} 條全港路線)`;
         return;
       }
 
       try {
-        statusBar.textContent = '🔄 預載全港路線數據中...';
-        const res = await fetch(API_KMB_ROUTES);
-        const json = await res.json();
-        
+        statusBar.textContent = '🔄 預載九巴及城巴全港路線庫中...';
+        const [kmbRes, ctbRes] = await Promise.all([
+          fetch(API_KMB_ROUTES).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch(API_CTB_ROUTES).then(r => r.json()).catch(() => ({ data: [] }))
+        ]);
+
         const map = new Map();
-        MTR_BUS_ROUTES.forEach(r => map.set(r.route, r));
-        (json.data || []).forEach(r => {
-          if (!map.has(r.route)) {
-            map.set(r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'KMB' });
+
+        // 1. 加入港鐵巴士
+        MTR_BUS_ROUTES.forEach(r => map.set('MTR_' + r.route, r));
+
+        // 2. 加入九巴
+        (kmbRes.data || []).forEach(r => {
+          const key = 'KMB_' + r.route;
+          if (!map.has(key)) {
+            map.set(key, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'KMB' });
+          }
+        });
+
+        // 3. 加入城巴 (解決 969、962、E22、A21 等等)
+        (ctbRes.data || []).forEach(r => {
+          const key = 'CTB_' + r.route;
+          if (!map.has(key)) {
+            map.set(key, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'CTB' });
           }
         });
 
         allRoutesCatalog = Array.from(map.values());
         localStorage.setItem(ROUTES_CACHE_KEY, JSON.stringify(allRoutesCatalog));
-        statusBar.textContent = `✅ 路線庫已就緒 (${allRoutesCatalog.length} 條路線)`;
+        statusBar.textContent = `✅ 全港路線已就緒 (${allRoutesCatalog.length} 條路線)`;
       } catch (e) {
         allRoutesCatalog = MTR_BUS_ROUTES;
-        statusBar.textContent = '⚠️ 預載部分路線庫，支援手動輸入';
+        statusBar.textContent = '⚠️ 預載部分路線，支援直接手動輸入';
       }
     }
 
+    // 模糊搜尋輸入監聽
     routeInput.addEventListener('input', (e) => {
       const query = e.target.value.trim().toUpperCase();
       if (!query) {
@@ -377,15 +386,19 @@
         return;
       }
 
+      // 比對路線號碼
       const matches = allRoutesCatalog.filter(r => r.route.includes(query))
         .sort((a, b) => {
+          // 精確前綴優先排前
           const aStarts = a.route.startsWith(query);
           const bStarts = b.route.startsWith(query);
           if (aStarts && !bStarts) return -1;
           if (!aStarts && bStarts) return 1;
+          // 長度較短優先 (例如打 969，969 先過 969A/969B)
+          if (a.route.length !== b.route.length) return a.route.length - b.route.length;
           return a.route.localeCompare(b.route, undefined, { numeric: true });
         })
-        .slice(0, 10);
+        .slice(0, 12);
 
       renderSuggestions(matches);
     });
@@ -400,19 +413,32 @@
       list.forEach(item => {
         const row = document.createElement('div');
         row.className = 'px-4 py-2.5 hover:bg-slate-50 active:bg-slate-100 cursor-pointer flex justify-between items-center transition';
-        const tagBg = item.co === 'MTR' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600';
+        
+        let coBadgeClass = 'bg-red-50 text-red-600';
+        let coName = item.co;
+        if (item.co === 'CTB') {
+          coBadgeClass = 'bg-amber-100 text-amber-800';
+          coName = '城巴';
+        } else if (item.co === 'MTR') {
+          coBadgeClass = 'bg-emerald-100 text-emerald-800';
+          coName = '港鐵巴士';
+        } else {
+          coName = '九巴';
+        }
+
         row.innerHTML = `
           <div class="flex items-center gap-2">
-            <span class="font-black text-base ${item.co === 'MTR' ? 'text-emerald-600' : 'text-red-600'}">${item.route}</span>
-            <span class="text-xs ${tagBg} px-1.5 py-0.5 rounded font-bold">${item.co}</span>
-            <span class="text-xs text-slate-500 font-medium truncate max-w-[170px]">${item.orig} ➔ ${item.dest}</span>
+            <span class="font-black text-base text-slate-800">${item.route}</span>
+            <span class="text-[10px] ${coBadgeClass} px-1.5 py-0.5 rounded font-bold">${coName}</span>
+            <span class="text-xs text-slate-500 font-medium truncate max-w-[160px]">${item.orig} ➔ ${item.dest}</span>
           </div>
           <span class="text-xs text-slate-400">選擇</span>
         `;
         row.onclick = () => {
           routeInput.value = item.route;
           suggestionsBox.classList.add('hidden');
-          searchRoute();
+          // 帶入被選公司的 hint
+          searchRoute(item.co);
         };
         suggestionsBox.appendChild(row);
       });
@@ -450,7 +476,7 @@
       loadHistory();
     }
 
-    async function searchRoute() {
+    async function searchRoute(companyHint = null) {
       const route = routeInput.value.trim().toUpperCase();
       if (!route) return;
       routeInput.blur();
@@ -484,17 +510,27 @@
         const kmbValid = (kmbOut.data && kmbOut.data.length) || (kmbIn.data && kmbIn.data.length);
         const ctbValid = (ctbOut.data && ctbOut.data.length) || (ctbIn.data && ctbIn.data.length);
 
-        if (kmbValid) {
+        if (companyHint === 'CTB' && ctbValid) {
+          currentCompany = 'CTB';
+        } else if (companyHint === 'KMB' && kmbValid) {
           currentCompany = 'KMB';
-          if (kmbOut.data && kmbOut.data.length) availableDirs.push('outbound');
-          if (kmbIn.data && kmbIn.data.length) availableDirs.push('inbound');
+        } else if (ctbValid && !kmbValid) {
+          currentCompany = 'CTB';
+        } else if (kmbValid) {
+          currentCompany = 'KMB';
         } else if (ctbValid) {
           currentCompany = 'CTB';
-          if (ctbOut.data && ctbOut.data.length) availableDirs.push('outbound');
-          if (ctbIn.data && ctbIn.data.length) availableDirs.push('inbound');
         } else {
           statusBar.textContent = `❌ 搵唔到路線 ${route}，請檢查號碼`;
           return;
+        }
+
+        if (currentCompany === 'KMB') {
+          if (kmbOut.data && kmbOut.data.length) availableDirs.push('outbound');
+          if (kmbIn.data && kmbIn.data.length) availableDirs.push('inbound');
+        } else {
+          if (ctbOut.data && ctbOut.data.length) availableDirs.push('outbound');
+          if (ctbIn.data && ctbIn.data.length) availableDirs.push('inbound');
         }
 
         currentDir = availableDirs[0];
@@ -509,7 +545,7 @@
     }
 
     async function loadMTRBusStops(route) {
-      statusBar.textContent = `📍 正在獲取港鐵巴士 ${route} 站點及班次...`;
+      statusBar.textContent = `📍 正在獲取港鐵巴士 ${route} 班次...`;
       results.innerHTML = '<div class="text-center text-slate-400 py-10"><div class="inline-block animate-spin mr-1">⏳</div> 載入中...</div>';
 
       try {
@@ -641,7 +677,7 @@
             ...s,
             dist: getDistance(pos.lat, pos.lng, s.lat, s.lng)
           })).sort((a, b) => a.dist - b.dist);
-          statusBar.textContent = `🎯 路線 ${currentRoute} (${currentCompany})：最近 3 個車站`;
+          statusBar.textContent = `🎯 路線 ${currentRoute} (${currentCompany === 'KMB' ? '九巴' : '城巴'})：最近 3 個車站`;
         } else {
           statusBar.textContent = `⚠️ 未獲取 GPS 定位，顯示前 3 個車站`;
         }
@@ -741,7 +777,7 @@
       }, 1000);
     }
 
-    btnSearch.onclick = searchRoute;
+    btnSearch.onclick = () => searchRoute();
     routeInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') searchRoute();
     });
