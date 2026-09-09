@@ -26,7 +26,7 @@
       <span class="text-xl">🧭</span>
       <div>
         <h1 class="text-base font-black tracking-wide leading-none">全港巴士實時雷達</h1>
-        <span class="text-[10px] text-slate-400">極速快取架構 · GPS 鎖定導航</span>
+        <span class="text-[10px] text-slate-400">雙向自動判斷 · 智能上車站匹配</span>
       </div>
     </div>
     <div id="refresh-badge" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-slate-300 hidden">
@@ -34,7 +34,7 @@
     </div>
   </header>
 
-  <!-- RWD 主佈局 -->
+  <!-- 主佈局 -->
   <main class="w-full max-w-md md:max-w-4xl lg:max-w-5xl mx-auto p-3 md:p-6">
     <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
 
@@ -99,16 +99,25 @@
             </div>
           </div>
 
-          <!-- 模式 2: 點對點目的地搜尋 (帶 GPS 強制鎖定指示) -->
+          <!-- 模式 2: 點對點目的地搜尋 -->
           <div id="panel-plan" class="space-y-2.5">
             
-            <!-- GPS 狀態條 -->
-            <div class="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold">
-              <div class="flex items-center gap-1.5 min-w-0">
-                <span id="gps-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                <span id="gps-status-text" class="text-slate-600 truncate">正在獲取目前 GPS 定位...</span>
+            <!-- GPS 狀態條與 PC 手動選位 -->
+            <div class="flex flex-col gap-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+              <div class="flex items-center justify-between font-bold">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span id="gps-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                  <span id="gps-status-text" class="text-slate-600 truncate">定位中...</span>
+                </div>
+                <button id="btn-re-gps" class="text-blue-600 hover:underline shrink-0 text-[11px]">重新定位</button>
               </div>
-              <button id="btn-re-gps" class="text-blue-600 hover:underline shrink-0 ml-1 text-[11px]">重新定位</button>
+              <!-- PC GPS 失敗時之快捷地點切換 -->
+              <div id="fallback-loc-bar" class="hidden flex items-center gap-1 pt-1 border-t border-slate-200/60 text-[10px] text-slate-500">
+                <span>快速設為目前位置:</span>
+                <button class="btn-set-loc px-1.5 py-0.5 bg-white border rounded font-bold hover:bg-slate-100" data-lat="22.3175" data-lng="114.1601" data-name="奧運站">奧運站</button>
+                <button class="btn-set-loc px-1.5 py-0.5 bg-white border rounded font-bold hover:bg-slate-100" data-lat="22.3193" data-lng="114.1694" data-name="旺角">旺角</button>
+                <button class="btn-set-loc px-1.5 py-0.5 bg-white border rounded font-bold hover:bg-slate-100" data-lat="22.3423" data-lng="114.1932" data-name="黃大仙">黃大仙</button>
+              </div>
             </div>
 
             <div class="relative">
@@ -121,10 +130,10 @@
               <div id="dest-suggest-box" class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-48 overflow-y-auto hidden z-50 divide-y divide-slate-100"></div>
             </div>
 
-            <!-- 匹配結果 Chips 區域 -->
+            <!-- 推薦路線 Chips 區域 -->
             <div id="matched-routes-bar" class="space-y-1.5 pt-1">
               <div class="flex justify-between items-center text-[11px] font-bold text-slate-400">
-                <span>直達路線 (已按身邊最近上車站排序):</span>
+                <span>直達路線 (智能判斷方向與最近車站):</span>
                 <div class="flex gap-1">
                   <button id="btn-scroll-left" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">‹</button>
                   <button id="btn-scroll-right" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600">›</button>
@@ -158,7 +167,7 @@
   </main>
 
   <script>
-    // ==================== 1. 居民專巴 ====================
+    // ==================== 1. 居民專巴時間表 ====================
     const SCHEDULE_WEEKDAY = [
       "06:15", "06:25", "06:35", "06:43", "06:51", "06:58",
       "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58",
@@ -336,6 +345,7 @@
     const gpsStatusText = document.getElementById('gps-status-text');
     const gpsDot = document.getElementById('gps-dot');
     const btnReGps = document.getElementById('btn-re-gps');
+    const fallbackLocBar = document.getElementById('fallback-loc-bar');
 
     const dirPanel = document.getElementById('dir-panel');
     const dirButtons = document.getElementById('dir-buttons');
@@ -354,7 +364,7 @@
     let nearestStopIndex = 0;
     let refreshInterval = null;
     let countdownSec = 30;
-    let cachedUserPos = null; // 全域 GPS 快取
+    let cachedUserPos = null;
 
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
@@ -364,43 +374,61 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    // ==================== 核心：強制同步獲取精確 GPS ====================
+    // ==================== 核心：強健 GPS 獲取與 PC Fallback ====================
     function ensureUserLocation(force = false) {
       if (cachedUserPos && !force) return Promise.resolve(cachedUserPos);
 
-      gpsStatusText.textContent = '正在定位你的真實 GPS 座標...';
+      gpsStatusText.textContent = '獲取真實 GPS 定位中...';
       gpsDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+      fallbackLocBar.classList.add('hidden');
 
       return new Promise((resolve) => {
         if (!navigator.geolocation) {
-          gpsStatusText.textContent = '瀏覽器不支援定位功能';
-          gpsDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+          handleGpsFailure('瀏覽器不支援定位');
           return resolve(null);
         }
 
         navigator.geolocation.getCurrentPosition(
           p => {
             cachedUserPos = { lat: p.coords.latitude, lng: p.coords.longitude };
-            gpsStatusText.textContent = `📍 已鎖定定位 (${cachedUserPos.lat.toFixed(3)}, ${cachedUserPos.lng.toFixed(3)})`;
+            gpsStatusText.textContent = `📍 已定位 (${cachedUserPos.lat.toFixed(3)}, ${cachedUserPos.lng.toFixed(3)})`;
             gpsDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+            fallbackLocBar.classList.add('hidden');
             resolve(cachedUserPos);
           },
           (err) => {
-            gpsStatusText.textContent = '無法獲取定位，將使用預設推薦';
-            gpsDot.className = 'w-2 h-2 rounded-full bg-rose-500';
-            resolve(null);
+            handleGpsFailure('無法獲取定位 (可點下方手動設定)');
+            resolve(cachedUserPos); // 若手動設過則回傳手動座標
           },
-          { timeout: 7000, enableHighAccuracy: true }
+          { timeout: 6000, enableHighAccuracy: true }
         );
       });
     }
+
+    function handleGpsFailure(msg) {
+      gpsStatusText.textContent = msg;
+      gpsDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      fallbackLocBar.classList.remove('hidden');
+    }
+
+    // 手動地點設定 (解決 Windows PC 沒 GPS 問題)
+    document.querySelectorAll('.btn-set-loc').forEach(btn => {
+      btn.onclick = () => {
+        const lat = parseFloat(btn.dataset.lat);
+        const lng = parseFloat(btn.dataset.lng);
+        const name = btn.dataset.name;
+        cachedUserPos = { lat, lng };
+        gpsStatusText.textContent = `📍 已手動設定身處：${name}`;
+        gpsDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        triggerDestSearch(inputDest.value);
+      };
+    });
 
     btnReGps.onclick = async () => {
       await ensureUserLocation(true);
       triggerDestSearch(inputDest.value);
     };
 
-    // Tab 切換：一進入【唔知搭咩？去邊度】先保證完成 GPS 定位
     tabRoute.onclick = () => {
       tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
       tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
@@ -414,7 +442,6 @@
       panelPlan.classList.remove('hidden');
       panelRoute.classList.add('hidden');
 
-      // 強制先拿定位，再觸發搜尋
       await ensureUserLocation();
       triggerDestSearch(inputDest.value);
     };
@@ -450,7 +477,6 @@
 
         statusBar.textContent = `✅ 資料庫就緒 (${allRoutesCatalog.length} 條路線)`;
         
-        // 第一次載入時啟動 GPS 並搜尋預設天水圍
         await ensureUserLocation();
         triggerDestSearch('TSW');
       } catch (e) {
@@ -458,15 +484,14 @@
       }
     }
 
-    // ==================== 核心：精確 GPS 距離比對與方向修正 ====================
+    // ==================== 核心：雙向自動分析 (Auto-Direction & Nearest Spot) ====================
     async function triggerDestSearch(rawInput) {
       const dest = normalizePlace(rawInput);
       if (!dest) return;
 
-      statusBar.textContent = `📍 正在計算離你目前位置最近的前往「${dest}」路線...`;
-      matchedRoutesChips.innerHTML = '<span class="text-xs text-slate-400 py-1">比對離你最近的上車站...</span>';
+      statusBar.textContent = `📍 正在比對離你最近的前往「${dest}」路線與方向...`;
+      matchedRoutesChips.innerHTML = '<span class="text-xs text-slate-400 py-1">計算最近車站與方向中...</span>';
 
-      // 確保獲取 GPS
       const pos = await ensureUserLocation();
 
       // 1. 檢索直達目的地的候選路線
@@ -482,7 +507,7 @@
 
       const candidateList = Array.from(candidates);
 
-      // 2. 嚴格比對：哪一條線前往該目的地的方向，在用家附近有站？
+      // 2. 核心比對：同時比對去程與回程，挑選「目的地吻合 + 車站離你最近」的方向
       let scoredRoutes = [];
 
       if (pos) {
@@ -495,59 +520,85 @@
                 fetch(`${API_KMB_ROUTE_STOP}/${rt}/inbound/1`).then(r => r.json()).catch(() => ({}))
               ]);
 
-              // 檢查去程與回程，哪一個方向的目的地才是真正吻合用家目的地
               const outStops = outRes.data || [];
               const inStops = inRes.data || [];
 
-              // 取該路線在資料庫中的目的地
-              const outInfo = allRoutesCatalog.find(i => i.route === rt);
-              
-              // 決定優先方向：例如 265B 去天水圍，去程是 柏景灣 往 天恒，所以去程 (outbound) 就是往天水圍
-              let chosenDir = 'outbound';
-              let stopsToMeasure = outStops;
-
-              if (outInfo && !outInfo.dest.includes(dest) && inStops.length) {
-                chosenDir = 'inbound';
-                stopsToMeasure = inStops;
-              }
-
-              // 計算沿線所有停站離用家目前座標的距離
-              let minStopDist = Infinity;
-              let nearestStopName = '';
-
-              (stopsToMeasure || []).forEach(s => {
+              // 計算去程沿線最短距離
+              let outMinDist = Infinity;
+              let outNearestStop = null;
+              outStops.forEach(s => {
                 const sData = globalStopMap.get('KMB_' + s.stop);
                 if (sData) {
                   const d = getDistance(pos.lat, pos.lng, sData.lat, sData.lng);
-                  if (d < minStopDist) {
-                    minStopDist = d;
-                    nearestStopName = sData.name;
+                  if (d < outMinDist) {
+                    outMinDist = d;
+                    outNearestStop = { seq: s.seq, stopId: s.stop, ...sData };
                   }
                 }
               });
 
+              // 計算回程沿線最短距離
+              let inMinDist = Infinity;
+              let inNearestStop = null;
+              inStops.forEach(s => {
+                const sData = globalStopMap.get('KMB_' + s.stop);
+                if (sData) {
+                  const d = getDistance(pos.lat, pos.lng, sData.lat, sData.lng);
+                  if (d < inMinDist) {
+                    inMinDist = d;
+                    inNearestStop = { seq: s.seq, stopId: s.stop, ...sData };
+                  }
+                }
+              });
+
+              // 智能判斷：哪個方向的終點站是目的地？
+              // 九巴 route catalog 記錄的 dest 通常是去程終點
+              const isOutDest = rObj.dest.includes(dest);
+              const isInDest = rObj.orig.includes(dest); // 回程終點即為去程起點
+
+              let chosenDir = 'outbound';
+              let finalDist = outMinDist;
+              let chosenStop = outNearestStop;
+
+              if (isInDest && inStops.length) {
+                chosenDir = 'inbound';
+                finalDist = inMinDist;
+                chosenStop = inNearestStop;
+              } else if (isOutDest && outStops.length) {
+                chosenDir = 'outbound';
+                finalDist = outMinDist;
+                chosenStop = outNearestStop;
+              } else {
+                // 若文字沒直接命中，選距離身邊最近的方向
+                if (inMinDist < outMinDist && inStops.length) {
+                  chosenDir = 'inbound';
+                  finalDist = inMinDist;
+                  chosenStop = inNearestStop;
+                }
+              }
+
               return {
                 route: rt,
                 co: rObj.co,
-                dist: minStopDist,
-                nearestStopName,
-                targetDir: chosenDir
+                dist: finalDist,
+                targetDir: chosenDir,
+                nearestStop: chosenStop
               };
             } catch (e) {
-              return { route: rt, co: rObj.co, dist: 999999, nearestStopName: '', targetDir: 'outbound' };
+              return { route: rt, co: rObj.co, dist: 999999, targetDir: 'outbound', nearestStop: null };
             }
           })
         );
 
-        // 核心排序：離你真實位置最近的排第一！
+        // 距離最近排序
         scoredRoutes.sort((a, b) => a.dist - b.dist);
       } else {
         scoredRoutes = candidateList.map(rt => ({
           route: rt,
           co: (allRoutesCatalog.find(i => i.route === rt) || {}).co || 'KMB',
           dist: 0,
-          nearestStopName: '',
-          targetDir: 'outbound'
+          targetDir: 'outbound',
+          nearestStop: null
         }));
       }
 
@@ -562,7 +613,7 @@
 
       scoredRoutes.slice(0, 12).forEach((item, idx) => {
         const chip = document.createElement('button');
-        const distLabel = (item.dist && item.dist < 10000) ? `(約${Math.round(item.dist)}m)` : '';
+        const distLabel = (item.dist && item.dist < 10000) ? `(${Math.round(item.dist)}m)` : '';
         chip.className = `px-3 py-1.5 rounded-xl text-xs font-black border shrink-0 transition flex items-center gap-1 ${
           idx === 0 ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
         }`;
@@ -575,12 +626,11 @@
         matchedRoutesChips.appendChild(chip);
       });
 
-      // 自動選取最近第一條 (身在奧運即自動鎖定 265B，並選中往天水圍方向)
+      // 自動載入最近的第一位 (例如 265B，自動帶入 inbound 回程)
       const topRoute = scoredRoutes[0];
       loadRouteFullTimeline(topRoute.route, topRoute.co, topRoute.targetDir);
     }
 
-    // 支援輸入即時辨識 Short Form
     inputDest.addEventListener('input', (e) => {
       const q = e.target.value.trim().toUpperCase();
       if (!q) {
@@ -588,7 +638,6 @@
         return;
       }
 
-      // 比對短寫與地點
       let matchedItems = [];
       Object.keys(PLACE_SHORTFORMS).forEach(sf => {
         if (sf.startsWith(q)) {
@@ -623,7 +672,16 @@
       if (e.key === 'Enter') triggerDestSearch(inputDest.value.trim());
     });
 
-    // ==================== 載入全線時間軸與正確方向 ====================
+    btnQuickReverse.onclick = () => {
+      if (availableDirs.length > 1) {
+        currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
+        renderDirButtons();
+        renderTimelineFast();
+        statusBar.textContent = `🔄 路線 ${currentRoute}：已手動掉轉方向 (${currentDir === 'outbound' ? '去程' : '回程'})`;
+      }
+    };
+
+    // ==================== 載入全線時間軸與精確最近站標註 ====================
     async function loadRouteFullTimeline(route, company = 'KMB', preferredDir = null) {
       currentRoute = route;
       currentCompany = company;
@@ -657,6 +715,7 @@
         return;
       }
 
+      // 自動採納最合理方向 (例如回程往天水圍)
       currentDir = (preferredDir && availableDirs.includes(preferredDir)) ? preferredDir : availableDirs[0];
 
       renderDirButtons();
@@ -711,7 +770,8 @@
         return { seq: s.seq, stopId: s.stop, ...obj };
       }));
 
-      nearestStopIndex = 0;
+      // 精準計算最近上車點
+      nearestStopIndex = -1;
       if (pos) {
         let minDist = Infinity;
         allRouteStops.forEach((s, idx) => {
@@ -724,9 +784,13 @@
             }
           }
         });
-        statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定最近上車點【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
+        
+        // 唯有真正搵到最近站時才標記
+        if (nearestStopIndex !== -1) {
+          statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定身邊最近車站【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
+        }
       } else {
-        statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站)`;
+        statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站 · 未定位)`;
       }
 
       drawTimelineUI();
@@ -752,8 +816,10 @@
       let htmlBuffer = headerTitle;
 
       allRouteStops.forEach((stop, idx) => {
-        const isPassed = idx < nearestStopIndex;
-        const isCurrent = idx === nearestStopIndex;
+        // 如果未有 GPS，不隨便將第 1 站當作已過或最近站
+        const hasPos = nearestStopIndex !== -1;
+        const isPassed = hasPos && idx < nearestStopIndex;
+        const isCurrent = hasPos && idx === nearestStopIndex;
         const isLast = idx === allRouteStops.length - 1;
 
         const lineHtml = isLast ? '' : `
@@ -790,6 +856,7 @@
               <div class="flex items-center gap-1.5">
                 <span class="text-[10px] ${isPassed ? 'text-slate-300' : (isCurrent ? 'text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-black' : 'text-slate-400')}">#${stop.seq}</span>
                 <span class="text-sm font-bold ${isPassed ? 'text-slate-300 line-through' : (isCurrent ? 'text-slate-900 font-black text-base' : 'text-slate-700')}">${stop.name}</span>
+                <span class="text-[10px] text-slate-300 font-medium">(${stop.stopId})</span>
                 ${isCurrent ? '<span class="text-[10px] bg-emerald-600 text-white font-black px-1.5 py-0.5 rounded-full shadow-sm">📍 最近上車</span>' : ''}
               </div>
               ${stop.dist !== undefined && isCurrent ? `<span class="text-xs font-black text-emerald-600">約 ${Math.round(stop.dist)}m</span>` : ''}
@@ -810,14 +877,19 @@
       listWrapper.innerHTML = htmlBuffer;
       timelineContainer.appendChild(listWrapper);
 
+      // 置中捲動
       setTimeout(() => {
-        const targetNode = document.getElementById(`stop-node-${nearestStopIndex}`);
-        if (targetNode) targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (nearestStopIndex !== -1) {
+          const targetNode = document.getElementById(`stop-node-${nearestStopIndex}`);
+          if (targetNode) targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }, 150);
     }
 
     function refreshUpcomingETAs() {
-      const activeTargets = allRouteStops.slice(nearestStopIndex, nearestStopIndex + 4);
+      const startIndex = nearestStopIndex === -1 ? 0 : nearestStopIndex;
+      const activeTargets = allRouteStops.slice(startIndex, startIndex + 4);
+      
       activeTargets.forEach(stop => {
         const etaBox = document.getElementById(`tl-eta-${stop.stopId}`);
         if (!etaBox) return;
