@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>全港巴士實時雷達</title>
+  <title>全港巴士實時雷達 & 沿線導航</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     button, input { touch-action: manipulation; }
@@ -39,12 +39,12 @@
       <!-- 左側操作面板 -->
       <div class="md:col-span-5 lg:col-span-5 space-y-3 md:sticky md:top-20">
         
-        <!-- 麗湖居專巴 Widget -->
+        <!-- 居民專巴 Widget (極致低調私隱版) -->
         <div class="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-3.5 rounded-2xl shadow-sm space-y-2">
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-1.5">
               <span>🏡</span>
-              <h2 class="font-black text-xs tracking-wide">居民專巴 </h2>
+              <h2 class="font-black text-xs tracking-wide">居民專巴</h2>
             </div>
             <div class="flex bg-black/20 p-0.5 rounded-lg text-[10px] font-bold">
               <button id="btn-sch-weekday" class="px-2 py-0.5 rounded transition">平日</button>
@@ -66,7 +66,7 @@
         <!-- 搜尋主卡片 (含 Tab 分流) -->
         <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-3 relative z-40">
           
-          <!-- 功能切換 Tab (解決混淆嘅核心！) -->
+          <!-- 功能切換 Tab -->
           <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-black">
             <button id="tab-route" class="flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1">
               <span>🚌</span> 查路線號碼
@@ -76,11 +76,11 @@
             </button>
           </div>
 
-          <!-- 模式 1: 純路線搜尋 (專門解決打 265B, K73, 969) -->
+          <!-- 模式 1: 純路線搜尋 -->
           <div id="panel-route" class="space-y-2.5">
             <div class="relative">
               <div class="flex gap-2">
-                <input type="text" id="route-input" placeholder="輸入路線 (例: 265B, K73, 969)" 
+                <input type="text" id="route-input" placeholder="輸入路線 (例: K73, 265B, 969)" 
                        inputmode="text" autocapitalize="characters" autocomplete="off"
                        class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-black text-base uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white" />
                 <button id="btn-search-single-route" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl active:scale-95 transition text-sm shrink-0">
@@ -93,7 +93,6 @@
 
           <!-- 模式 2: 點對點目的地搜尋 -->
           <div id="panel-plan" class="hidden space-y-2.5">
-            <!-- 終點輸入 -->
             <div class="relative">
               <div class="flex items-center border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white">
                 <span class="text-xs font-black text-rose-600 mr-2 shrink-0">🔴 目的地</span>
@@ -111,7 +110,7 @@
             </div>
           </div>
 
-          <!-- 方向切換面板 (選定路線後自動浮現) -->
+          <!-- 方向切換面板 -->
           <div id="dir-panel" class="hidden flex items-center gap-2 pt-2 border-t border-slate-100">
             <div id="dir-buttons" class="flex flex-1 gap-1.5"></div>
             <button id="btn-reverse" title="對調方向" class="bg-slate-100 active:bg-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-xl text-sm border border-slate-300 active:rotate-180 transition-transform flex items-center justify-center">
@@ -129,7 +128,7 @@
       <div class="md:col-span-7 lg:col-span-7 space-y-3">
         <div id="timeline-container" class="space-y-3 relative z-10">
           <div class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400">
-            請在左側輸入或選擇路線，即可即時顯示全線站點與最近上車點
+            請在左側輸入路線號碼（如 K73），即時列出實時到站時間
           </div>
         </div>
       </div>
@@ -138,7 +137,7 @@
   </main>
 
   <script>
-    // ==================== 1. 麗湖居專巴 ====================
+    // ==================== 1. 居民專巴時間表 (去敏感化) ====================
     const SCHEDULE_WEEKDAY = [
       "06:15", "06:25", "06:35", "06:43", "06:51", "06:58",
       "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58",
@@ -237,9 +236,9 @@
       const secLeft = first.diffSec % 60;
 
       nextTimeEl.textContent = first.time;
-      if (first.isSkipMTR) noteEl.innerHTML = '<span class="text-rose-200 bg-rose-900/60 px-1.5 py-0.5 rounded">不停西鐵</span>';
-      else if (first.isViaBlock2) noteEl.innerHTML = '<span class="text-amber-200">經第2座</span>';
-      else noteEl.innerHTML = '<span class="text-emerald-100">直達西鐵站</span>';
+      if (first.isSkipMTR) noteEl.innerHTML = '<span class="text-rose-200 bg-rose-900/60 px-1.5 py-0.5 rounded">特別班次</span>';
+      else if (first.isViaBlock2) noteEl.innerHTML = '<span class="text-amber-200">經分站</span>';
+      else noteEl.innerHTML = '<span class="text-emerald-100">正常班次</span>';
 
       if (minLeft <= 0) {
         countdownEl.textContent = `${secLeft}s 開出`;
@@ -252,7 +251,35 @@
     setInterval(updateShuttleWidget, 1000);
     updateShuttleWidget();
 
-    // ==================== 2. 全港熱門地標庫 ====================
+    // ==================== 2. 全港港鐵巴士 (MTR Bus 專屬庫) ====================
+    const MTR_BUS_ROUTES = [
+      { route: "K73", orig: "天恒", dest: "元朗(西)", co: "MTR" },
+      { route: "K74", orig: "天水圍市中心", dest: "凹頭 (循環線)", co: "MTR" },
+      { route: "K75A", orig: "天水圍站", dest: "洪水橋 (循環線)", co: "MTR" },
+      { route: "K75P", orig: "天瑞", dest: "洪水橋 (循環線)", co: "MTR" },
+      { route: "K75S", orig: "天水圍站", dest: "洪福邨", co: "MTR" },
+      { route: "K76", orig: "天恒", dest: "天水圍站", co: "MTR" },
+      { route: "K76S", orig: "濕地公園路", dest: "天水圍站", co: "MTR" },
+      { route: "K65", orig: "元朗站", dest: "流浮山", co: "MTR" },
+      { route: "K65A", orig: "天恩", dest: "流浮山", co: "MTR" },
+      { route: "K66", orig: "朗屏", dest: "大棠黃泥墩村", co: "MTR" },
+      { route: "K66A", orig: "朗屏", dest: "大棠山道", co: "MTR" },
+      { route: "K68", orig: "元朗工業邨", dest: "元朗公園 (循環線)", co: "MTR" },
+      { route: "K51", orig: "富泰", dest: "大欖", co: "MTR" },
+      { route: "K51A", orig: "富泰", dest: "掃管笏", co: "MTR" },
+      { route: "K52", orig: "屯門站", dest: "龍鼓灘", co: "MTR" },
+      { route: "K52A", orig: "屯門站", dest: "曾咀", co: "MTR" },
+      { route: "K52S", orig: "屯門站", dest: "龍鼓灘", co: "MTR" },
+      { route: "K53", orig: "屯門站", dest: "掃管笏 (循環線)", co: "MTR" },
+      { route: "K54", orig: "和田邨", dest: "屯門市中心 (循環線)", co: "MTR" },
+      { route: "K58", orig: "富泰", dest: "青山灣", co: "MTR" },
+      { route: "506", orig: "屯門碼頭", dest: "兆麟", co: "MTR" },
+      { route: "K12", orig: "大埔墟站", dest: "八號花園", co: "MTR" },
+      { route: "K14", orig: "大埔超級城", dest: "大埔墟站", co: "MTR" },
+      { route: "K17", orig: "大埔墟站", dest: "富善", co: "MTR" },
+      { route: "K18", orig: "大埔墟站", dest: "廣福", co: "MTR" }
+    ];
+
     const HK_PLACES = [
       "黃大仙", "元朗", "天水圍", "屯門", "觀塘", "旺角", "尖沙咀", "中環", "金鐘", "灣仔", 
       "銅鑼灣", "沙田", "荃灣", "葵芳", "深水埗", "紅磡", "九龍灣", "大埔", "將軍澳", "東涌", "機場", "奧運"
@@ -280,6 +307,7 @@
     const API_CTB_ROUTE_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB';
     const API_CTB_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/stop/';
     const API_CTB_ETA = 'https://rt.data.gov.hk/v2/transport/citybus/eta/CTB';
+    const API_MTR_BUS_ETA = 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule';
 
     // UI Elements
     const tabRoute = document.getElementById('tab-route');
@@ -315,7 +343,6 @@
     let refreshInterval = null;
     let countdownSec = 30;
 
-    // ==================== 3. Tab 切換邏輯 (徹底分家) ====================
     tabRoute.onclick = () => {
       tabRoute.className = 'flex-1 py-2 rounded-lg transition bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 font-black';
       tabPlan.className = 'flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1 font-black';
@@ -349,7 +376,7 @@
       });
     }
 
-    // 初始化全港資料庫
+    // 初始化全港資料庫 (完整整合九巴 + 城巴 + 港鐵巴士)
     async function initSystem() {
       try {
         statusBar.textContent = '⚡ 載入全港路線與車站資料庫...';
@@ -360,6 +387,10 @@
         ]);
 
         const rMap = new Map();
+        
+        // 核心補救：優先加入港鐵巴士 (K73 等)
+        MTR_BUS_ROUTES.forEach(r => rMap.set('MTR_' + r.route, r));
+
         (kmbR.data || []).forEach(r => rMap.set('KMB_' + r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'KMB' }));
         (ctbR.data || []).forEach(r => rMap.set('CTB_' + r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'CTB' }));
         allRoutesCatalog = Array.from(rMap.values());
@@ -374,11 +405,12 @@
 
         statusBar.textContent = `✅ 資料庫就緒 (${allRoutesCatalog.length} 條路線)`;
       } catch (e) {
-        statusBar.textContent = '⚠️ 初始化輕微延遲，已切換備用模式';
+        allRoutesCatalog = MTR_BUS_ROUTES;
+        statusBar.textContent = '⚠️ 初始化切換備用模式';
       }
     }
 
-    // ==================== 4. 模式 A: 純路線輸入搜尋 ====================
+    // ==================== 純路線輸入搜尋 (支援 K73, 265B, 969) ====================
     routeInput.addEventListener('input', (e) => {
       const q = e.target.value.trim().toUpperCase();
       if (!q) {
@@ -403,10 +435,11 @@
       matches.forEach(r => {
         const item = document.createElement('div');
         item.className = 'px-3.5 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center text-xs';
+        const tagClass = r.co === 'MTR' ? 'bg-emerald-100 text-emerald-800' : (r.co === 'CTB' ? 'bg-amber-100 text-amber-800' : 'bg-red-50 text-red-600');
         item.innerHTML = `
           <div class="flex items-center gap-1.5">
             <span class="font-black text-sm text-slate-800">${r.route}</span>
-            <span class="text-[10px] bg-slate-100 text-slate-500 px-1 rounded font-bold">${r.co}</span>
+            <span class="text-[10px] ${tagClass} px-1 rounded font-bold">${r.co}</span>
             <span class="text-slate-500 font-medium truncate max-w-[160px]">${r.orig} ➔ ${r.dest}</span>
           </div>
           <span class="text-blue-600 font-bold">選取</span>
@@ -425,15 +458,16 @@
       const r = routeInput.value.trim().toUpperCase();
       if (!r) return;
       routeSuggestBox.classList.add('hidden');
-      const found = allRoutesCatalog.find(item => item.route === r) || { route: r, co: 'KMB' };
-      loadRouteFullTimeline(found.route, found.co);
+      const found = allRoutesCatalog.find(item => item.route === r);
+      if (found) loadRouteFullTimeline(found.route, found.co);
+      else loadRouteFullTimeline(r, r.startsWith('K') ? 'MTR' : 'KMB');
     };
 
     routeInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') btnSearchSingleRoute.click();
     });
 
-    // ==================== 5. 模式 B: 目的地導航搜尋 ====================
+    // ==================== 目的地搜尋 ====================
     inputDest.addEventListener('input', (e) => {
       const q = e.target.value.trim();
       if (!q) {
@@ -506,17 +540,25 @@
       if (!e.target.closest('#input-dest') && !e.target.closest('#dest-suggest-box')) destSuggestBox.classList.add('hidden');
     });
 
-    // ==================== 6. 載入路線與時間軸渲染 ====================
+    // ==================== 載入路線與時間軸 (支援港鐵巴士) ====================
     async function loadRouteFullTimeline(route, company = 'KMB') {
       currentRoute = route;
       currentCompany = company;
       statusBar.textContent = `⚡ 正在載入 ${route} 站點...`;
-      timelineContainer.innerHTML = '<div class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 py-10"><div class="inline-block animate-spin mr-1">⏳</div> 載入站點中...</div>';
+      timelineContainer.innerHTML = '<div class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 py-10"><div class="inline-block animate-spin mr-1">⏳</div> 載入中...</div>';
       
       dirPanel.classList.add('hidden');
       clearInterval(refreshInterval);
       refreshBadge.classList.add('hidden');
 
+      // 1. 如果係港鐵巴士 (MTR) -> 直接行港鐵 API
+      if (company === 'MTR' || route.startsWith('K') || route === '506') {
+        currentCompany = 'MTR';
+        loadMTRBusTimeline(route);
+        return;
+      }
+
+      // 2. 九巴 / 城巴
       const [pos, kmbOut, kmbIn, ctbOut, ctbIn] = await Promise.all([
         getUserLocation(),
         fetch(`${API_KMB_ROUTE_STOP}/${route}/outbound/1`).then(r => r.json()).catch(() => ({})),
@@ -543,6 +585,65 @@
       currentDir = availableDirs[0];
       renderDirButtons();
       renderTimelineFast(pos);
+    }
+
+    // 港鐵巴士 (K73 等) 渲染邏輯
+    async function loadMTRBusTimeline(route) {
+      try {
+        const res = await fetch(API_MTR_BUS_ETA, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: "zh", routeName: route })
+        });
+        const data = await res.json();
+        const busStops = data.busStop || [];
+
+        if (!busStops.length) {
+          statusBar.textContent = `❌ 港鐵巴士 ${route} 暫無服務或已過尾班車`;
+          timelineContainer.innerHTML = '';
+          return;
+        }
+
+        statusBar.textContent = `🎯 港鐵巴士 ${route} (共 ${busStops.length} 站)`;
+        
+        let html = `
+          <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+              <span class="text-base font-black text-slate-900">${route} (港鐵巴士)</span>
+              <span class="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold">即時班次</span>
+            </div>
+        `;
+
+        busStops.forEach((stop, idx) => {
+          const buses = stop.bus || [];
+          let etaStr = '<span class="text-[10px] text-slate-400">暫無下班車</span>';
+          if (buses.length) {
+            etaStr = buses.slice(0, 2).map(b => {
+              const sec = parseInt(b.departureTimeInSecond);
+              const min = Math.round(sec / 60);
+              const label = min <= 1 ? '即將開出' : `${min} 分鐘`;
+              return `<span class="inline-block mr-2 px-2 py-0.5 rounded text-xs font-black ${min <= 3 ? 'bg-rose-600 text-white animate-pulse' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}">🚍 ${label}</span>`;
+            }).join('');
+          }
+
+          html += `
+            <div class="flex items-start gap-3 pb-3 border-b border-slate-50 last:border-0">
+              <span class="text-xs text-slate-400 font-bold mt-0.5">#${idx + 1}</span>
+              <div class="flex-1">
+                <div class="text-sm font-bold text-slate-800">${stop.busStopId}</div>
+                <div class="mt-1">${etaStr}</div>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `</div>`;
+        timelineContainer.innerHTML = html;
+
+      } catch (e) {
+        statusBar.textContent = '❌ 讀取港鐵巴士班次失敗';
+        timelineContainer.innerHTML = '';
+      }
     }
 
     function renderDirButtons() {
