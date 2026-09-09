@@ -86,7 +86,7 @@
                        inputmode="text" autocapitalize="characters" autocomplete="off"
                        class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 font-black text-base uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white min-w-0" />
                 
-                <button id="btn-quick-reverse" title="掉轉去程/回程方向" 
+                <button id="btn-quick-reverse" title="掉轉方向" 
                         class="bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-black px-3 py-2.5 rounded-xl text-base border border-slate-300 active:rotate-180 transition-transform duration-200 shrink-0 flex items-center justify-center shadow-sm">
                   ⇆
                 </button>
@@ -142,7 +142,7 @@
             </div>
           </div>
 
-          <!-- 方向切換面板 -->
+          <!-- 方向狀態列 (智慧切換按鈕，預設自動選取) -->
           <div id="dir-panel" class="hidden flex items-center gap-2 pt-2 border-t border-slate-100">
             <div id="dir-buttons" class="flex flex-1 gap-1.5"></div>
           </div>
@@ -602,7 +602,7 @@
         mtrBusStopsCache.reverse();
         currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
         renderMTRBusUI(r, mtrBusStopsCache);
-        statusBar.textContent = `🔄 港鐵巴士 ${r}：已掉轉方向 (${currentDir === 'outbound' ? '去程' : '回程'})`;
+        statusBar.textContent = `🔄 港鐵巴士 ${r}：已掉轉方向`;
         return;
       }
 
@@ -610,11 +610,11 @@
         currentDir = (currentDir === 'outbound') ? 'inbound' : 'outbound';
         renderDirButtons();
         renderTimelineFast();
-        statusBar.textContent = `🔄 路線 ${currentRoute}：已手動掉轉方向 (${currentDir === 'outbound' ? '去程' : '回程'})`;
+        statusBar.textContent = `🔄 路線 ${currentRoute}：已掉轉方向`;
       }
     };
 
-    // ==================== 目的地搜尋邏輯 ====================
+    // ==================== 核心：目的地搜尋與全自動方向判定 ====================
     async function triggerDestSearch(rawInput) {
       const dest = normalizePlace(rawInput);
       if (!dest) {
@@ -654,6 +654,7 @@
               const outStops = outRes.data || [];
               const inStops = inRes.data || [];
 
+              // 計算去程距離
               let outMinDist = Infinity;
               let outNearestStop = null;
               outStops.forEach(s => {
@@ -667,6 +668,7 @@
                 }
               });
 
+              // 計算回程距離
               let inMinDist = Infinity;
               let inNearestStop = null;
               inStops.forEach(s => {
@@ -680,24 +682,28 @@
                 }
               });
 
-              const isOutDest = rObj.dest.includes(dest);
-              const isInDest = rObj.orig.includes(dest);
+              // 終極全自動判斷：哪個方向的「終點站」才是你的目的地？
+              // 九巴 catalog: dest 是去程終點，orig 是回程終點
+              const isOutGoingToDest = rObj.dest.includes(dest);
+              const isInGoingToDest = rObj.orig.includes(dest);
 
-              let chosenDir = 'outbound';
+              let autoDir = 'outbound';
               let finalDist = outMinDist;
               let chosenStop = outNearestStop;
 
-              if (isInDest && inStops.length) {
-                chosenDir = 'inbound';
+              if (isInGoingToDest && inStops.length) {
+                // 目的地在回程終點（例如 265B 柏景灣往天恒），自動鎖定回程！
+                autoDir = 'inbound';
                 finalDist = inMinDist;
                 chosenStop = inNearestStop;
-              } else if (isOutDest && outStops.length) {
-                chosenDir = 'outbound';
+              } else if (isOutGoingToDest && outStops.length) {
+                autoDir = 'outbound';
                 finalDist = outMinDist;
                 chosenStop = outNearestStop;
               } else {
+                // 若無文字直屬，自動挑選離用家最近且合理的單邊
                 if (inMinDist < outMinDist && inStops.length) {
-                  chosenDir = 'inbound';
+                  autoDir = 'inbound';
                   finalDist = inMinDist;
                   chosenStop = inNearestStop;
                 }
@@ -709,7 +715,7 @@
                 route: rt,
                 co: rObj.co,
                 dist: finalDist,
-                targetDir: chosenDir,
+                targetDir: autoDir,
                 nearestStop: chosenStop
               };
             } catch (e) {
@@ -754,11 +760,13 @@
         chip.onclick = () => {
           [...matchedRoutesChips.children].forEach(c => c.className = 'px-3 py-1.5 rounded-xl text-xs font-black border shrink-0 bg-white text-slate-800 border-slate-200');
           chip.className = 'px-3 py-1.5 rounded-xl text-xs font-black border shrink-0 bg-blue-600 text-white border-blue-600 shadow';
+          // 點擊 Chip 直接帶入自動算好的正確方向！
           loadRouteFullTimeline(item.route, item.co, item.targetDir);
         };
         matchedRoutesChips.appendChild(chip);
       });
 
+      // 自動載入真正第一名（自動帶入回程 inbound，完全免手動撳！）
       const topRoute = scoredRoutes[0];
       loadRouteFullTimeline(topRoute.route, topRoute.co, topRoute.targetDir);
     }
@@ -844,8 +852,10 @@
         return;
       }
 
+      // 全自動方向鎖定：優先採用傳入的 preferredDir (例如 inbound)
       currentDir = (preferredDir && availableDirs.includes(preferredDir)) ? preferredDir : availableDirs[0];
 
+      // 即時渲染方向按鈕列（並高亮正確選中之方向）
       renderDirButtons();
       renderTimelineFast(pos);
     }
@@ -919,16 +929,30 @@
       timelineContainer.innerHTML = html;
     }
 
+    // 智能渲染方向按鈕（直接帶出終點站名，直觀清楚）
     function renderDirButtons() {
       dirButtons.innerHTML = '';
       dirPanel.classList.remove('hidden');
+
+      const rInfo = allRoutesCatalog.find(i => i.route === currentRoute);
+      
       availableDirs.forEach(dir => {
         const btn = document.createElement('button');
         const isActive = dir === currentDir;
-        btn.className = `flex-1 py-1.5 rounded-lg text-xs font-black transition ${
-          isActive ? 'bg-slate-800 text-white shadow-sm' : 'bg-slate-100 text-slate-600'
+
+        // 清楚標註目的地：例如 往天恒邨 / 往柏景灣
+        let dirLabel = dir === 'outbound' ? '去程' : '回程';
+        if (rInfo) {
+          dirLabel = dir === 'outbound' ? `往 ${rInfo.dest}` : `往 ${rInfo.orig}`;
+        }
+
+        btn.className = `flex-1 py-2 rounded-xl text-xs font-black transition ${
+          isActive 
+            ? 'bg-slate-900 text-white shadow-md' 
+            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
         }`;
-        btn.textContent = dir === 'outbound' ? '去程' : '回程';
+        btn.innerHTML = `${isActive ? '✓ ' : ''}${dirLabel}`;
+        
         btn.onclick = () => {
           if (currentDir === dir) return;
           currentDir = dir;
@@ -982,7 +1006,7 @@
         });
         
         if (nearestStopIndex !== -1) {
-          statusBar.textContent = `🎯 路線 ${currentRoute}：已鎖定最近上車點【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
+          statusBar.textContent = `🎯 路線 ${currentRoute}：已自動切換至最近上車點【${allRouteStops[nearestStopIndex].name}】(約 ${Math.round(minDist)}m)`;
         }
       } else {
         statusBar.textContent = `🎯 路線 ${currentRoute} (共 ${allRouteStops.length} 站)`;
@@ -998,13 +1022,16 @@
       const listWrapper = document.createElement('div');
       listWrapper.className = 'bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm relative';
 
+      const rInfo = allRoutesCatalog.find(i => i.route === currentRoute);
+      const targetTerminal = rInfo ? (currentDir === 'outbound' ? rInfo.dest : rInfo.orig) : '';
+
       const headerTitle = `
         <div class="flex justify-between items-center pb-4 mb-4 border-b border-slate-100">
           <div class="flex items-center gap-2">
             <span class="text-lg font-black text-slate-900">路線 ${currentRoute}</span>
-            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">共 ${allRouteStops.length} 站</span>
+            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">往 ${targetTerminal}</span>
           </div>
-          <span class="text-xs text-slate-400 font-medium">${currentCompany === 'KMB' ? '九巴' : '城巴'} (${currentDir === 'outbound' ? '去程' : '回程'})</span>
+          <span class="text-xs text-slate-400 font-medium">${currentCompany === 'KMB' ? '九巴' : '城巴'}</span>
         </div>
       `;
 
@@ -1098,7 +1125,7 @@
       }, 150);
     }
 
-    // ==================== 核心修正：嚴格校準九巴官方 ETA ====================
+    // ==================== ETA 讀取 (對齊官方算法) ====================
     function refreshUpcomingETAs() {
       const startIndex = nearestStopIndex === -1 ? 0 : nearestStopIndex;
       const activeTargets = allRouteStops.slice(startIndex, startIndex + 4);
@@ -1108,12 +1135,10 @@
         if (!etaBox) return;
 
         if (currentCompany === 'KMB') {
-          // 終極修復：指定九巴官方 /eta/{stop_id}/{route}/{service_type}
           fetch(`${API_KMB_ETA_ROUTE_STOP}/${stop.stopId}/${currentRoute}/1`)
             .then(r => r.json())
             .then(json => {
               const expectedDir = (currentDir === 'outbound') ? 'O' : 'I';
-              // 嚴格雙重過濾：路線必須相符，且方向 (dir) 必須吻合當前前進方向！
               let etas = (json.data || []).filter(item => {
                 const matchRoute = item.route === currentRoute;
                 const matchDir = !item.dir || item.dir === expectedDir;
@@ -1152,14 +1177,12 @@
 
         const etaDate = new Date(item.eta);
         const diffMs = etaDate - now;
-        // 對齊九巴官方 App 算法：以無條件進位 (Math.ceil) 顯示剩餘分鐘
         const minLeft = Math.ceil(diffMs / 60000);
         
         let label = '';
         if (minLeft <= 1) label = '即將抵達';
         else label = `${minLeft} 分鐘`;
 
-        // 標記預定班次
         const isScheduled = item.rmk_tc && item.rmk_tc.includes('預定');
         const badgeTag = isScheduled ? ' 預定' : '';
         const isUrgent = minLeft <= 3;
