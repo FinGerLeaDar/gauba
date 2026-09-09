@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>全港巴士實時雷達 (九巴/城巴/港鐵巴士)</title>
+  <title>全港巴士實時雷達 + 麗湖居專巴</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     button, input { touch-action: manipulation; }
@@ -19,7 +19,7 @@
       <span class="text-xl">🚌</span>
       <div>
         <h1 class="text-base font-black tracking-wide leading-none">全港巴士實時雷達</h1>
-        <span class="text-[10px] text-slate-400">九巴 · 城巴 · 港鐵巴士 (K車)</span>
+        <span class="text-[10px] text-slate-400">九巴 · 城巴 · 港鐵巴士 · 麗湖居專巴</span>
       </div>
     </div>
     <div id="refresh-badge" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-slate-300 hidden">
@@ -28,8 +28,40 @@
   </header>
 
   <main class="max-w-md mx-auto p-3 space-y-3">
+
+    <!-- 麗湖居專巴即時倒數 Widget -->
+    <div class="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-4 rounded-2xl shadow-md space-y-2.5">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-1.5">
+          <span class="text-lg">🏡</span>
+          <h2 class="font-black text-sm tracking-wide">麗湖居專巴 ➔ 天水圍站</h2>
+        </div>
+        
+        <!-- 平日 / 假日 切換鈕 -->
+        <div class="flex bg-black/20 p-0.5 rounded-lg text-[11px] font-bold">
+          <button id="btn-sch-weekday" class="px-2 py-0.5 rounded-md transition">平日</button>
+          <button id="btn-sch-holiday" class="px-2 py-0.5 rounded-md transition">假日</button>
+        </div>
+      </div>
+
+      <div id="shuttle-main" class="pt-1 flex justify-between items-end">
+        <div>
+          <div class="text-[11px] text-emerald-100 font-medium">下一班車開出</div>
+          <div id="shuttle-next-time" class="text-2xl font-black tracking-tight">--:--</div>
+        </div>
+        <div class="text-right">
+          <div id="shuttle-countdown" class="text-3xl font-black text-amber-300">計算中...</div>
+          <div id="shuttle-note" class="text-[11px] font-bold"></div>
+        </div>
+      </div>
+
+      <!-- 隨後班次預告 -->
+      <div class="pt-2 border-t border-white/15 flex justify-between items-center text-xs text-emerald-100" id="shuttle-upcoming">
+        <span>隨後班次: 載入中...</span>
+      </div>
+    </div>
     
-    <!-- 搜尋與模糊建議容器 -->
+    <!-- 巴士搜尋與模糊建議容器 -->
     <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 relative z-40">
       <div class="relative">
         <div class="flex gap-2">
@@ -41,7 +73,7 @@
           </button>
         </div>
 
-        <!-- 模糊搜尋下拉建議選單 (Autocomplete Dropdown) -->
+        <!-- 模糊搜尋下拉建議選單 -->
         <div id="suggestions-box" class="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-64 overflow-y-auto hidden z-50 divide-y divide-slate-100">
         </div>
       </div>
@@ -52,7 +84,7 @@
         <div id="history-chips" class="flex gap-1.5"></div>
       </div>
 
-      <!-- 方向列 + 對調掣 (KMB/CTB 專用) -->
+      <!-- 方向列 + 對調掣 -->
       <div id="dir-panel" class="hidden flex items-center gap-2 pt-1 border-t border-slate-100">
         <div id="dir-buttons" class="flex flex-1 gap-1.5"></div>
         <button id="btn-reverse" title="對調去程/回程" class="bg-slate-100 active:bg-slate-300 text-slate-700 font-bold px-3.5 py-2 rounded-xl text-base border border-slate-300 active:rotate-180 transition-transform flex items-center justify-center">
@@ -62,7 +94,7 @@
     </div>
 
     <!-- Status Bar -->
-    <div id="status-bar" class="text-xs text-slate-400 text-center font-medium">載入全港路線庫中...</div>
+    <div id="status-bar" class="text-xs text-slate-400 text-center font-medium">輸入路線號碼查詢班次</div>
 
     <!-- 列表展示區 -->
     <div id="results" class="space-y-3 relative z-10"></div>
@@ -70,7 +102,160 @@
   </main>
 
   <script>
-    // 港鐵巴士全線硬編碼庫
+    // ==================== 1. 麗湖居專巴完整數據庫 ====================
+    // 平日 (星期一至五，公眾假期除外) - 尾班車 22:52
+    // # 代表不途經天水圍西鐵站
+    const SCHEDULE_WEEKDAY = [
+      "06:15", "06:25", "06:35", "06:43", "06:51", "06:58",
+      "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58",
+      "08:03", "08:09", "08:14", "08:20", "08:25", "08:31", "08:36", "08:42", "08:47", "08:53", "08:58",
+      "09:04", "09:11", "09:18", "09:25", "09:32", "09:39", "09:46", "09:53",
+      "10:00", "10:07", "10:15", "10:22", "10:30", "10:37", "10:45", "10:52",
+      "11:00", "11:07", "11:15", "11:22", "11:30", "11:37", "11:45", "11:52",
+      "12:00", "12:07", "12:15", "12:22", "12:30", "12:37", "12:45", "12:52",
+      "13:00", "13:07", "13:15", "13:22", "13:30", "13:37", "13:45", "13:52",
+      "15:00", "15:07", "15:15", "15:22", "15:30", "15:37", "15:45", "15:52",
+      "16:00", "16:07", "16:15", "16:22", "16:30", "16:37", "16:45", "16:52",
+      "17:00", "17:07", "17:15", "17:22", "17:30", "17:37", "17:45", "17:54",
+      "18:00#", "18:05", "18:13", "18:20", "18:30#", "18:35", "18:43", "18:50",
+      "19:00#", "19:05", "19:13", "19:20", "19:30#", "19:35", "19:43", "19:50",
+      "20:00", "20:07", "20:15", "20:22", "20:30", "20:37", "20:45", "20:52",
+      "21:00", "21:07", "21:15", "21:22", "21:30", "21:37", "21:45", "21:52",
+      "22:00", "22:07", "22:15", "22:22", "22:30", "22:37", "22:45", "22:52"
+    ];
+
+    // 星期六、日及公眾假期 - 尾班車 00:00 (24:00)
+    // ◆ 代表途經麗湖居第 2 座落客
+    const SCHEDULE_HOLIDAY = [
+      "06:15", "06:25", "06:35", "06:43", "06:51", "06:58",
+      "07:04", "07:10", "07:16", "07:22", "07:28", "07:34", "07:40", "07:46", "07:52", "07:58",
+      "08:03", "08:09", "08:14", "08:20", "08:25", "08:31", "08:36", "08:42", "08:47", "08:53", "08:58",
+      "09:04", "09:11", "09:18", "09:25", "09:32", "09:39", "09:46", "09:53",
+      "10:00◆", "10:07◆", "10:15◆", "10:22◆", "10:30◆", "10:37◆", "10:45◆", "10:52◆",
+      "11:00◆", "11:07◆", "11:15◆", "11:22◆", "11:30◆", "11:37◆", "11:45◆", "11:52◆",
+      "12:00◆", "12:07◆", "12:15◆", "12:22◆", "12:30◆", "12:37◆", "12:45◆", "12:52◆",
+      "13:00◆", "13:07◆", "13:15◆", "13:22◆", "13:30◆", "13:37◆", "13:45◆", "13:52◆",
+      "14:00◆", "14:07◆", "14:15◆", "14:22◆", "14:30◆", "14:37◆", "14:45◆", "14:52◆",
+      "15:00◆", "15:07◆", "15:15◆", "15:22◆", "15:30◆", "15:37◆", "15:45◆", "15:52◆",
+      "16:00◆", "16:07", "16:15", "16:22", "16:30", "16:37", "16:45", "16:52",
+      "17:00", "17:07", "17:15", "17:22", "17:30", "17:37", "17:45", "17:52",
+      "18:00", "18:07", "18:15", "18:22", "18:30", "18:37", "18:45", "18:52",
+      "19:00", "19:07", "19:15", "19:22", "19:30", "19:37", "19:45", "19:52",
+      "20:00", "20:07", "20:15", "20:22", "20:30", "20:37", "20:45", "20:52",
+      "21:00", "21:07", "21:15", "21:22", "21:30", "21:37", "21:45", "21:52",
+      "22:00", "22:07", "22:15", "22:22", "22:30", "22:37", "22:45", "22:52",
+      "23:00", "23:07", "23:15", "23:22", "23:30", "23:37", "23:45", "23:52",
+      "24:00"
+    ];
+
+    // 判斷今日預設係咪週末 (0 = 週日, 6 = 週六)
+    const todayDay = new Date().getDay();
+    let isHolidayMode = (todayDay === 0 || todayDay === 6);
+
+    const btnWeekday = document.getElementById('btn-sch-weekday');
+    const btnHoliday = document.getElementById('btn-sch-holiday');
+
+    function syncScheduleToggleUI() {
+      if (isHolidayMode) {
+        btnHoliday.className = 'px-2 py-0.5 rounded-md transition bg-white text-emerald-800 shadow-sm';
+        btnWeekday.className = 'px-2 py-0.5 rounded-md transition text-white/80 hover:text-white';
+      } else {
+        btnWeekday.className = 'px-2 py-0.5 rounded-md transition bg-white text-emerald-800 shadow-sm';
+        btnHoliday.className = 'px-2 py-0.5 rounded-md transition text-white/80 hover:text-white';
+      }
+    }
+
+    btnWeekday.onclick = () => { isHolidayMode = false; syncScheduleToggleUI(); updateShuttleWidget(); };
+    btnHoliday.onclick = () => { isHolidayMode = true; syncScheduleToggleUI(); updateShuttleWidget(); };
+    syncScheduleToggleUI();
+
+    function updateShuttleWidget() {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const currentSeconds = now.getSeconds();
+
+      const activeSchedule = isHolidayMode ? SCHEDULE_HOLIDAY : SCHEDULE_WEEKDAY;
+      let upcoming = [];
+
+      for (let rawItem of activeSchedule) {
+        const isSkipMTR = rawItem.includes('#');
+        const isViaBlock2 = rawItem.includes('◆');
+        const cleanTime = rawItem.replace('#', '').replace('◆', '');
+        
+        let [h, m] = cleanTime.split(':').map(Number);
+        const totalMin = h * 60 + m;
+
+        if (totalMin >= currentMinutes) {
+          const diffSec = (totalMin - currentMinutes) * 60 - currentSeconds;
+          if (diffSec >= 0) {
+            upcoming.push({
+              time: cleanTime === '24:00' ? '00:00' : cleanTime,
+              diffSec,
+              isSkipMTR,
+              isViaBlock2
+            });
+          }
+        }
+      }
+
+      const nextTimeEl = document.getElementById('shuttle-next-time');
+      const countdownEl = document.getElementById('shuttle-countdown');
+      const noteEl = document.getElementById('shuttle-note');
+      const upcomingEl = document.getElementById('shuttle-upcoming');
+
+      if (!upcoming.length) {
+        nextTimeEl.textContent = '今日服務已完結';
+        countdownEl.textContent = '尾班已過';
+        countdownEl.className = 'text-2xl font-black text-slate-300';
+        noteEl.textContent = '';
+        upcomingEl.innerHTML = '<span>明日頭班車: 06:15 開出</span>';
+        return;
+      }
+
+      const first = upcoming[0];
+      const minLeft = Math.floor(first.diffSec / 60);
+      const secLeft = first.diffSec % 60;
+
+      nextTimeEl.textContent = first.time;
+
+      // 標註提示
+      if (first.isSkipMTR) {
+        noteEl.innerHTML = '<span class="text-rose-200 bg-rose-900/60 px-2 py-0.5 rounded">⚠️ 不停西鐵站</span>';
+      } else if (first.isViaBlock2) {
+        noteEl.innerHTML = '<span class="text-amber-200">途經第 2 座</span>';
+      } else {
+        noteEl.innerHTML = '<span class="text-emerald-100">天水圍站直達</span>';
+      }
+
+      if (minLeft <= 0) {
+        countdownEl.textContent = `即將開出 (${secLeft}s)`;
+        countdownEl.className = 'text-2xl font-black text-rose-300 animate-pulse';
+      } else {
+        countdownEl.textContent = `${minLeft}分 ${secLeft}秒`;
+        countdownEl.className = 'text-3xl font-black text-amber-300';
+      }
+
+      // 下 2 班預覽
+      const rest = upcoming.slice(1, 3);
+      if (rest.length) {
+        upcomingEl.innerHTML = `
+          <span>隨後: <b>${rest.map(r => {
+            let label = r.time;
+            if (r.isSkipMTR) label += '(不經西鐵)';
+            if (r.isViaBlock2) label += '(經2座)';
+            return label;
+          }).join(' · ')}</b></span>
+        `;
+      } else {
+        upcomingEl.innerHTML = '<span>此班為最後班次</span>';
+      }
+    }
+
+    // 每秒即時倒數
+    setInterval(updateShuttleWidget, 1000);
+    updateShuttleWidget();
+
+    // ==================== 2. 全港巴士雷達邏輯 ====================
     const MTR_BUS_ROUTES = [
       { route: "K73", orig: "天恒", dest: "元朗(西)", co: "MTR" },
       { route: "K74", orig: "天水圍市中心", dest: "凹頭 (循環線)", co: "MTR" },
@@ -110,8 +295,8 @@
 
     const API_MTR_BUS_ETA = 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule';
 
-    const ROUTES_CACHE_KEY = 'hk_all_routes_v3';
-    const HISTORY_KEY = 'hk_recent_routes_v3';
+    const ROUTES_CACHE_KEY = 'hk_all_routes_v4';
+    const HISTORY_KEY = 'hk_recent_routes_v4';
 
     const routeInput = document.getElementById('route-input');
     const suggestionsBox = document.getElementById('suggestions-box');
@@ -127,7 +312,7 @@
     const timerSec = document.getElementById('timer-sec');
 
     let allRoutesCatalog = [];
-    let currentCompany = ''; // 'KMB', 'CTB', 'MTR'
+    let currentCompany = '';
     let currentRoute = '';
     let currentDir = 'outbound';
     let availableDirs = [];
@@ -155,7 +340,6 @@
       });
     }
 
-    // 1. 初始化路線表 (合體 KMB + MTR Bus)
     async function initCatalog() {
       const cached = localStorage.getItem(ROUTES_CACHE_KEY);
       if (cached) {
@@ -170,10 +354,7 @@
         const json = await res.json();
         
         const map = new Map();
-        // 加入 MTR Bus
         MTR_BUS_ROUTES.forEach(r => map.set(r.route, r));
-
-        // 加入九巴
         (json.data || []).forEach(r => {
           if (!map.has(r.route)) {
             map.set(r.route, { route: r.route, orig: r.orig_tc, dest: r.dest_tc, co: 'KMB' });
@@ -184,18 +365,15 @@
         localStorage.setItem(ROUTES_CACHE_KEY, JSON.stringify(allRoutesCatalog));
         statusBar.textContent = `✅ 路線庫已就緒 (${allRoutesCatalog.length} 條路線)`;
       } catch (e) {
-        // Fallback: 至少有 MTR Bus
         allRoutesCatalog = MTR_BUS_ROUTES;
         statusBar.textContent = '⚠️ 預載部分路線庫，支援手動輸入';
       }
     }
 
-    // 2. 模糊搜尋輸入監聽 (打 K / 98 彈出建議)
     routeInput.addEventListener('input', (e) => {
       const query = e.target.value.trim().toUpperCase();
       if (!query) {
         suggestionsBox.classList.add('hidden');
-        suggestionsBox.innerHTML = '';
         return;
       }
 
@@ -241,14 +419,12 @@
       suggestionsBox.classList.remove('hidden');
     }
 
-    // 點擊空白處收起下拉
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#route-input') && !e.target.closest('#suggestions-box')) {
         suggestionsBox.classList.add('hidden');
       }
     });
 
-    // 3. 常用紀錄
     function loadHistory() {
       const list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
       if (!list.length) { historyBox.classList.add('hidden'); return; }
@@ -274,7 +450,6 @@
       loadHistory();
     }
 
-    // 4. 核心搜尋：分流 KMB / CTB / MTR Bus
     async function searchRoute() {
       const route = routeInput.value.trim().toUpperCase();
       if (!route) return;
@@ -291,7 +466,6 @@
       clearInterval(refreshInterval);
       refreshBadge.classList.add('hidden');
 
-      // 檢查係咪 MTR Bus
       const isMtrBus = MTR_BUS_ROUTES.some(r => r.route === route);
       if (isMtrBus) {
         currentCompany = 'MTR';
@@ -299,7 +473,6 @@
         return;
       }
 
-      // 否則為 KMB 或 CTB
       try {
         const [kmbOut, kmbIn, ctbOut, ctbIn] = await Promise.all([
           fetch(`${API_KMB_ROUTE_STOP}/${route}/outbound/1`).then(r => r.json()).catch(() => ({})),
@@ -335,7 +508,6 @@
       }
     }
 
-    // 處理港鐵巴士 (MTR Bus POST API)
     async function loadMTRBusStops(route) {
       statusBar.textContent = `📍 正在獲取港鐵巴士 ${route} 站點及班次...`;
       results.innerHTML = '<div class="text-center text-slate-400 py-10"><div class="inline-block animate-spin mr-1">⏳</div> 載入中...</div>';
@@ -404,7 +576,6 @@
       }
     }
 
-    // 處理九巴 / 城巴站點與定位排序
     function renderDirButtons() {
       dirButtons.innerHTML = '';
       availableDirs.forEach(dir => {
