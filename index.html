@@ -360,9 +360,11 @@
       "觀塘": ["268C", "269C", "258D", "259D", "62X", "40", "42C", "38", "14", "1A", "89", "98", "98A", "296A", "101", "619"]
     };
 
-    const API_KMB_ROUTES = 'https://data.etabus.gov.hk/v1/transport/kmb/route/';
-    const API_CTB_ROUTES = 'https://rt.data.gov.hk/v2/transport/citybus/route/CTB';
-    const API_KMB_ALL_STOPS = 'https://data.etabus.gov.hk/v1/transport/kmb/stop';
+    const WORKER_URL = 'https://hk-bus-cachedeploy.kachai2008.workers.dev/?url=';
+
+    const API_KMB_ROUTES = WORKER_URL + encodeURIComponent('https://data.etabus.gov.hk/v1/transport/kmb/route/');
+    const API_CTB_ROUTES = WORKER_URL + encodeURIComponent('https://rt.data.gov.hk/v2/transport/citybus/route/CTB');
+    const API_KMB_ALL_STOPS = WORKER_URL + encodeURIComponent('https://data.etabus.gov.hk/v1/transport/kmb/stop');
     const API_KMB_ROUTE_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/route-stop';
     const API_KMB_ETA_ROUTE_STOP = 'https://data.etabus.gov.hk/v1/transport/kmb/eta';
     const API_CTB_ROUTE_STOP = 'https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB';
